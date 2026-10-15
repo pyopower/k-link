@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """USRP test peer for k-link: send a WAV to transmit and record what comes back.
 
-  usrp_test.py --send msg.wav --record out.wav --wait 20
+  python3 -m klink.usrp_peer --send msg.wav --record out.wav --wait 20
 """
 import argparse, socket, struct, time, wave, subprocess, os, tempfile
 

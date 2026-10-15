@@ -1,4 +1,7 @@
 k-link.ini
 __pycache__/
+*.egg-info/
+build/
+dist/
 *.wav
 *.raw

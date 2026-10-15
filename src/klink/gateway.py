@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-"""k-link: radio gateway through the Bluetooth "K-plug" adapter of the Abbree
-wireless PTT kit (YHD_BTA512).
+"""The gateway service: K-plug adapter <-> USRP over UDP.
 
 The adapter plugs into the radio's K connector and behaves like a phone
-(HFP Audio Gateway). This host takes the place of the Abbree speaker-mic
+(HFP Audio Gateway). This host takes the place of the speaker-mic
 (HFP Hands-Free):
 
   * PTT   = AVRCP passthrough, acted on RELEASE: FF -> TX, REWIND -> RX.
@@ -11,16 +9,17 @@ The adapter plugs into the radio's K connector and behaves like a phone
   * RX    = the adapter opens a "call" only while the radio outputs audio,
             so the presence of the PipeWire input node is our COS/squelch.
 
-Network side: USRP over UDP (ASL chan_usrp, DVSwitch Analog_Bridge, ...).
+Network side: USRP (ASL chan_usrp, DVSwitch Analog_Bridge, ...).
 """
-import argparse
 import asyncio
-import configparser
 import logging
 import re
+import signal
 import socket
 import struct
 import time
+
+from .bt import Adapter
 
 log = logging.getLogger("k-link")
 
@@ -28,63 +27,6 @@ FRAME_SAMPLES = 160                 # 20 ms at 8 kHz
 FRAME_BYTES = FRAME_SAMPLES * 2
 USRP_HDR = struct.Struct(">4sIIIIIII")
 USRP_VOICE = 0
-
-
-# ---------------------------------------------------------------- Bluetooth
-
-class Adapter:
-    """BlueZ side: connection and PTT keys (via busctl, no extra deps)."""
-
-    def __init__(self, mac):
-        self.mac = mac.upper()
-        self.path = "/org/bluez/hci0/dev_" + self.mac.replace(":", "_")
-
-    async def _run(self, *args, timeout=10):
-        p = await asyncio.create_subprocess_exec(
-            *args, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT)
-        try:
-            out, _ = await asyncio.wait_for(p.communicate(), timeout)
-        except asyncio.TimeoutError:
-            p.kill()
-            return 1, ""
-        return p.returncode, out.decode(errors="replace")
-
-    async def connected(self):
-        rc, out = await self._run(
-            "busctl", "get-property", "org.bluez", self.path,
-            "org.bluez.Device1", "Connected")
-        return rc == 0 and out.strip() == "b true"
-
-    async def connect(self):
-        rc, out = await self._run("bluetoothctl", "connect", self.mac,
-                                  timeout=25)
-        return "successful" in out
-
-    async def disconnect(self):
-        await self._run("bluetoothctl", "disconnect", self.mac)
-
-    async def _key(self, method):
-        rc, out = await self._run(
-            "busctl", "call", "org.bluez", self.path,
-            "org.bluez.MediaControl1", method)
-        if rc:
-            log.warning("AVRCP %s failed: %s", method, out.strip())
-        return rc == 0
-
-    async def _tap(self, key, release_with):
-        # BlueZ holds FF/REWIND (repeating the press) until another key is
-        # sent; the adapter acts on release, so release with a harmless key.
-        ok = await self._key(key)
-        await asyncio.sleep(0.3)
-        await self._key(release_with)
-        return ok
-
-    async def ptt_down(self):
-        return await self._tap("FastForward", "VolumeDown")
-
-    async def ptt_up(self):
-        return await self._tap("Rewind", "VolumeUp")
 
 
 # ---------------------------------------------------------------- PipeWire
@@ -101,6 +43,7 @@ async def bluez_nodes(mac):
 
 
 def pw_cat(mode, target):
+    """Raw 8 kHz mono s16 stream to/from a PipeWire node via pw-cat."""
     args = ["pw-record" if mode == "rec" else "pw-play", "--target", target,
             "--rate", "8000", "--channels", "1", "--format", "s16",
             "--latency", "40ms", "-"]
@@ -140,16 +83,14 @@ class Usrp(asyncio.DatagramProtocol):
         if typ != USRP_VOICE:
             return
         audio = data[USRP_HDR.size:USRP_HDR.size + FRAME_BYTES]
-        self.gw.net_frame(bool(keyup), audio if len(audio) == FRAME_BYTES
-                          else b"")
+        self.gw.net_frame(bool(keyup),
+                          audio if len(audio) == FRAME_BYTES else b"")
 
     def send(self, keyup, audio=b""):
         if not self.transport:
             return
         pkt = USRP_HDR.pack(b"USRP", self.seq, 0, int(keyup),
-                            self.gw.cfg.getint("usrp", "talkgroup",
-                                               fallback=0),
-                            USRP_VOICE, 0, 0) + audio
+                            self.gw.talkgroup, USRP_VOICE, 0, 0) + audio
         self.seq = (self.seq + 1) & 0xFFFFFFFF
         self.transport.sendto(pkt, self.gw.remote)
 
@@ -162,8 +103,11 @@ class Gateway:
     def __init__(self, cfg):
         self.cfg = cfg
         self.bt = Adapter(cfg.get("bluetooth", "mac"))
+        self.listen = (cfg.get("usrp", "listen_host", fallback="0.0.0.0"),
+                       cfg.getint("usrp", "listen_port"))
         self.remote = (cfg.get("usrp", "remote_host"),
                        cfg.getint("usrp", "remote_port"))
+        self.talkgroup = cfg.getint("usrp", "talkgroup", fallback=0)
         self.tx_timeout = cfg.getfloat("ptt", "tx_timeout", fallback=180)
         self.net_hang = cfg.getfloat("ptt", "net_hang", fallback=0.5)
         self.rx_ignore = cfg.getfloat("ptt", "rx_ignore_after_tx",
@@ -174,6 +118,7 @@ class Gateway:
         self.last_net = 0.0
         self.rx_blocked_until = 0.0
         self.nodes = set()
+        self.tx_task = None
 
     # --- network -> radio
     def net_frame(self, keyup, audio):
@@ -185,7 +130,8 @@ class Gateway:
             return                       # half duplex: radio has the channel
         if self.state == self.IDLE:
             self.state = self.TX
-            asyncio.get_running_loop().create_task(self.do_tx())
+            self.tx_task = asyncio.get_running_loop().create_task(
+                self.do_tx())
         if audio and not self.txq.full():
             self.txq.put_nowait(audio)
 
@@ -220,6 +166,8 @@ class Gateway:
                 if player and player.returncode is None:
                     player.stdin.write(a)
                     await player.stdin.drain()
+        except asyncio.CancelledError:
+            log.info("TX interrupted")
         except Exception:
             log.exception("TX error")
         finally:
@@ -230,15 +178,18 @@ class Gateway:
                 except Exception:
                     pass
                 await stop_proc(player)
-            if not await self.bt.ptt_up():
-                # can't release the radio: drop the link, that always unkeys
-                log.error("PTT up failed, disconnecting adapter")
-                await self.bt.disconnect()
+            await self.unkey()
             while not self.txq.empty():
                 self.txq.get_nowait()
             self.rx_blocked_until = time.monotonic() + self.rx_ignore
             self.state = self.IDLE
             log.info("TX end (%.1f s)", time.monotonic() - t0)
+
+    async def unkey(self):
+        if not await self.bt.ptt_up():
+            # can't release the radio: dropping the link always unkeys it
+            log.error("PTT up failed, disconnecting adapter")
+            await self.bt.disconnect()
 
     # --- radio -> network
     async def do_rx(self, node):
@@ -283,38 +234,21 @@ class Gateway:
 
     async def run(self):
         loop = asyncio.get_running_loop()
-        await loop.create_datagram_endpoint(
-            lambda: self._mk_usrp(),
-            local_addr=(self.cfg.get("usrp", "listen_host",
-                                     fallback="0.0.0.0"),
-                        self.cfg.getint("usrp", "listen_port")),
-            family=socket.AF_INET)
-        log.info("USRP listen :%d -> %s:%d, adapter %s",
-                 self.cfg.getint("usrp", "listen_port"), *self.remote,
-                 self.bt.mac)
-        await self.watch()
+        stop = asyncio.Event()
+        for s in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(s, stop.set)
 
-    def _mk_usrp(self):
-        self.usrp = Usrp(self)
-        return self.usrp
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("-c", "--config", default="k-link.ini")
-    ap.add_argument("-v", "--verbose", action="store_true")
-    a = ap.parse_args()
-    logging.basicConfig(
-        level=logging.DEBUG if a.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s")
-    cfg = configparser.ConfigParser()
-    if not cfg.read(a.config):
-        ap.error("cannot read " + a.config)
-    try:
-        asyncio.run(Gateway(cfg).run())
-    except KeyboardInterrupt:
-        pass
-
-
-if __name__ == "__main__":
-    main()
+        def mk():
+            self.usrp = Usrp(self)
+            return self.usrp
+        await loop.create_datagram_endpoint(mk, local_addr=self.listen,
+                                            family=socket.AF_INET)
+        log.info("USRP listen %s:%d -> %s:%d, adapter %s",
+                 *self.listen, *self.remote, self.bt.mac)
+        watcher = loop.create_task(self.watch())
+        await stop.wait()
+        log.info("stopping")
+        watcher.cancel()
+        if self.tx_task and not self.tx_task.done():
+            self.tx_task.cancel()        # its finally: unkeys the radio
+            await asyncio.gather(self.tx_task, return_exceptions=True)
