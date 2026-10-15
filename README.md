@@ -42,8 +42,21 @@ So no VOX or audio-level detection is needed: the adapter does it.
 
 ## Install
 
+Debian / Raspberry Pi OS / Ubuntu (pulls in BlueZ and PipeWire):
+
+```sh
+sudo apt install ./k-link_0.1.0_all.deb    # build it with packaging/build-deb.sh
+```
+
+or anywhere with Python 3.9+:
+
 ```sh
 pipx install .       # from a clone of this repository
+```
+
+Then:
+
+```sh
 k-link config        # creates ~/.config/k-link/k-link.ini
 ```
 
@@ -84,7 +97,8 @@ received level is too high or too low.
 ### Run as a service
 
 ```sh
-k-link install-service           # systemd user service, enabled and started
+systemctl --user enable --now k-link   # .deb install: unit already shipped
+k-link install-service           # pipx install: writes the user unit and starts it
 sudo loginctl enable-linger $USER   # start at boot without logging in
 k-link status
 ```

@@ -1,0 +1,12 @@
+[Unit]
+Description=k-link radio gateway (Bluetooth K-plug adapter <-> USRP)
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=/usr/bin/k-link run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
