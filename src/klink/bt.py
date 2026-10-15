@@ -5,9 +5,12 @@ Python dependencies beyond the standard library.
 """
 import asyncio
 import logging
+import os
 import re
+import select
 import shutil
 import subprocess
+import time
 
 log = logging.getLogger("k-link")
 
@@ -96,7 +99,8 @@ def _set_class(major, minor):
     return False
 
 
-def pair(timeout=120, mic_name=MIC_NAME, say=print):
+def pair(timeout=120, mic_name=MIC_NAME,
+         say=lambda m: print(m, flush=True)):
     """Pose as the speaker-mic until the adapter pairs with us.
 
     Returns the adapter MAC, or None. The controller alias and class are
@@ -110,47 +114,54 @@ def pair(timeout=120, mic_name=MIC_NAME, say=print):
             "run with sudo or allow 'sudo -n btmgmt'); trying anyway")
     bc = subprocess.Popen(["bluetoothctl"], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          text=True, bufsize=1)
+                          text=True)
 
     def cmd(c):
         bc.stdin.write(c + "\n")
         bc.stdin.flush()
 
     for c in ("power on", "agent NoInputNoOutput", "default-agent",
-              f"system-alias {mic_name}", "pairable on",
+              f"system-alias {mic_name}" if mic_name else "", "pairable on",
               f"discoverable-timeout {timeout}", "discoverable on"):
-        cmd(c)
-    say(f"Visible as '{mic_name}' for {timeout} s.")
+        if c:
+            cmd(c)
+    say(f"Visible as '{mic_name or old_alias}' for {timeout} s.")
     say("Switch off the speaker-mic, then put the K-plug adapter in pairing "
         "mode (fast blinking LED).")
     mac = None
     names = {}
     ansi = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\r")
-    import selectors
-    import time
-    sel = selectors.DefaultSelector()
-    sel.register(bc.stdout, selectors.EVENT_READ)
     end = time.monotonic() + timeout
+    buf = ""
     try:
-        while time.monotonic() < end and not mac:
-            if not sel.select(timeout=1):
+        while time.monotonic() < end:
+            # read in chunks: the agent's "(yes/no)" prompt has no newline
+            if not select.select([bc.stdout], [], [], 1)[0]:
                 continue
-            line = ansi.sub("", bc.stdout.readline())
-            if not line:
+            chunk = os.read(bc.stdout.fileno(), 4096).decode(errors="replace")
+            if not chunk:
                 break
-            m = re.search(r"Device ([0-9A-F:]{17}) (?:Name: )?(.+)", line)
-            if m and "RSSI" not in line:
-                names.setdefault(m.group(1), m.group(2).strip())
-            if "(yes/no)" in line:          # pairing / service authorization
+            buf += ansi.sub("", chunk)
+            if "(yes/no)" in buf:           # pairing / service authorization
                 cmd("yes")
-            m = re.search(r"Device ([0-9A-F:]{17}) (?:Paired|Bonded): yes",
-                          line)
-            if m:
-                mac = m.group(1)
+                buf = buf.replace("(yes/no)", "")
+            *lines, buf = buf.split("\n")
+            for line in lines:
+                m = re.search(r"\[NEW\] Device ([0-9A-F:]{17}) (.+)", line)
+                if m:
+                    names.setdefault(m.group(1), m.group(2).strip())
+                m = re.search(r"Device ([0-9A-F:]{17}) (?:Paired|Bonded): yes",
+                              line)
+                if m and not mac:
+                    mac = m.group(1)
+                    cmd(f"trust {mac}")
+                    # keep answering the service authorizations that follow
+                    end = min(end, time.monotonic() + 5)
         if mac:
-            cmd(f"trust {mac}")
-            time.sleep(1)
-            say(f"Paired with {mac} ({names.get(mac, '?')}), trusted.")
+            name = names.get(mac) or subprocess.run(
+                ["bluetoothctl", "info", mac], capture_output=True, text=True
+            ).stdout.partition("Name: ")[2].split("\n")[0] or "?"
+            say(f"Paired with {mac} ({name}), trusted.")
         else:
             say("No adapter paired in time.")
     finally:

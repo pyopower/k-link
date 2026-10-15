@@ -191,7 +191,8 @@ def main():
     p = sub.add_parser("pair", help="pair the K-plug adapter")
     p.add_argument("--timeout", type=int, default=120)
     p.add_argument("--as-name", default="KST_vHMIC010",
-                   help="Bluetooth name of the speaker-mic to impersonate")
+                   help="Bluetooth name of the speaker-mic to impersonate "
+                   "(empty: keep this computer's own name)")
     p.set_defaults(f=cmd_pair)
     p = sub.add_parser("test", help="loop test through an echo channel")
     p.add_argument("--wav", help="WAV to transmit (default: test beeps)")

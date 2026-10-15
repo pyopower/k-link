@@ -119,6 +119,7 @@ class Gateway:
         self.rx_blocked_until = 0.0
         self.nodes = set()
         self.tx_task = None
+        self.link_up = False
 
     # --- network -> radio
     def net_frame(self, keyup, audio):
@@ -126,8 +127,8 @@ class Gateway:
         if not keyup:
             self.last_net = 0.0          # explicit unkey: end now
             return
-        if self.state == self.RX:
-            return                       # half duplex: radio has the channel
+        if self.state == self.RX or not self.link_up:
+            return                       # half duplex / no Bluetooth link
         if self.state == self.IDLE:
             self.state = self.TX
             self.tx_task = asyncio.get_running_loop().create_task(
@@ -221,10 +222,11 @@ class Gateway:
             now = time.monotonic()
             if now - last_check > 5 and self.state == self.IDLE:
                 last_check = now
-                if not await self.bt.connected():
+                self.link_up = await self.bt.connected()
+                if not self.link_up:
                     log.info("adapter not connected, connecting...")
-                    log.info("connect: %s",
-                             "ok" if await self.bt.connect() else "failed")
+                    self.link_up = await self.bt.connect()
+                    log.info("connect: %s", "ok" if self.link_up else "failed")
             self.nodes = await bluez_nodes(self.bt.mac)
             if self.state == self.IDLE and now >= self.rx_blocked_until:
                 inp = next((n for n in self.nodes if "input" in n), None)
