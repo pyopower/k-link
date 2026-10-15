@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>k-link</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#1d2330;--mut:#667085;--line:#e3e6eb;
+--acc:#2563eb;--tx:#dc2626;--rx:#16a34a;--warn:#d97706;--busy:#7c3aed;
+--meter:#e9ecf1;--radius:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--card:#171b23;--fg:#e6e9ef;
+--mut:#9aa3b2;--line:#262c37;--meter:#222833}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 16px;
+max-width:980px;margin:auto}
+header h1{font-size:20px;margin:0;letter-spacing:.3px}
+header h1 b{color:var(--acc)}
+.pill{padding:3px 10px;border-radius:99px;font-size:13px;background:var(--meter);
+color:var(--mut);white-space:nowrap}
+.pill.ok{background:#16a34a22;color:var(--rx)}.pill.bad{background:#dc262622;color:var(--tx)}
+main{max-width:980px;margin:auto;padding:0 16px 32px;display:grid;gap:14px;
+grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+padding:16px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);
+margin:0 0 12px}
+.wide{grid-column:1/-1}
+#state{display:flex;align-items:center;gap:16px}
+#lamp{width:64px;height:64px;border-radius:50%;background:var(--meter);
+display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;
+transition:background .15s, box-shadow .15s;flex:none}
+#lamp.tx{background:var(--tx);box-shadow:0 0 24px var(--tx)}
+#lamp.rx{background:var(--rx);box-shadow:0 0 24px var(--rx)}
+#lamp.busy{background:var(--busy)}#lamp.idle{background:#64748b}
+#stateTxt{font-size:22px;font-weight:650}#stateSub{color:var(--mut);font-size:13px}
+.meter{margin:10px 0}.meter label{display:flex;justify-content:space-between;
+font-size:13px;color:var(--mut)}
+.bar{height:14px;border-radius:7px;background:var(--meter);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:7px;transition:width .12s}
+#mTx i{background:linear-gradient(90deg,#f87171,var(--tx))}
+#mRx i{background:linear-gradient(90deg,#4ade80,var(--rx))}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;
+background:var(--acc);color:#fff;font-weight:600}
+button.sec{background:var(--meter);color:var(--fg)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.help{color:var(--mut);font-size:13px;margin:6px 0 0}
+#log{font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;max-height:260px;
+overflow:auto;margin:0;padding:0;list-style:none}
+#log li{padding:2px 0;border-bottom:1px dashed var(--line)}
+#log .t{color:var(--mut);margin-right:8px}#log .warning{color:var(--warn)}
+#log .error{color:var(--tx)}
+.field{display:grid;grid-template-columns:1fr 130px;gap:8px;align-items:center;
+margin:7px 0}
+.field span{font-size:14px}.field small{display:block;color:var(--mut);font-size:12px}
+input[type=text],input[type=number]{font:inherit;width:100%;padding:7px 9px;
+border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.switch{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px}
+pre.snip{background:var(--bg);border:1px solid var(--line);border-radius:10px;
+padding:10px;font-size:12.5px;overflow:auto;margin:8px 0}
+audio{width:100%;margin-top:8px}
+.stat{display:flex;gap:18px;font-size:13px;color:var(--mut);margin-top:10px}
+.stat b{color:var(--fg);font-size:16px}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>k</b>-link</h1>
+  <span id="bt" class="pill">…</span>
+  <span id="links" class="pill"></span>
+</header>
+<main>
+  <section class="card">
+    <h2 data-i="radio">Radio</h2>
+    <div id="state"><div id="lamp" class="idle">—</div>
+      <div><div id="stateTxt">…</div><div id="stateSub"></div></div></div>
+    <div class="meter" id="mTx"><label><span data-i="toRadio">To radio (TX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
+    <div class="meter" id="mRx"><label><span data-i="fromRadio">From radio (RX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
+    <div class="stat"><span>TX <b id="nTx">0</b></span><span>RX <b id="nRx">0</b></span><span id="lastAct"></span></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i="actions">Actions</h2>
+    <div class="row">
+      <button id="bPair" data-i="pair">Pair adapter</button>
+      <button id="bTest" data-i="test">Loop test</button>
+      <button id="bBeep" class="sec" data-i="beep">Transmit beeps</button>
+    </div>
+    <p class="help" id="hPair" data-i="hPair">Pair: switch the speaker-mic off and put the adapter in pairing mode (fast blinking LED).</p>
+    <p class="help" data-i="hTest">Loop test: put the radio on an echo/parrot channel (DMR TG 9990) first.</p>
+    <audio id="testAudio" controls hidden></audio>
+  </section>
+
+  <section class="card">
+    <h2>AllStarLink / DVSwitch (USRP)</h2>
+    <label class="switch"><input type="checkbox" data-k="usrp.enabled"> <span data-i="enabled">Enabled</span></label>
+    <div class="field"><span data-i="listenPort">k-link listens on port</span><input type="number" data-k="usrp.listen_port"></div>
+    <div class="field"><span data-i="remoteHost">Send to host</span><input type="text" data-k="usrp.remote_host"></div>
+    <div class="field"><span data-i="remotePort">Send to port</span><input type="number" data-k="usrp.remote_port"></div>
+    <div class="field"><span data-i="aslNode">ASL private node for the radio</span><input type="number" id="aslNode" value="1922"></div>
+    <p class="help" data-i="hAsl">Add this to /etc/asterisk/rpt.conf on the ASL machine, restart Asterisk and link it to your node (*3 + node):</p>
+    <pre class="snip" id="aslSnip"></pre>
+    <button class="sec" id="bCopy" data-i="copy">Copy</button>
+  </section>
+
+  <section class="card">
+    <h2 data-i="sound">Sound card (EchoLink/SvxLink, APRS, …)</h2>
+    <label class="switch"><input type="checkbox" data-k="soundcard.enabled"> <span data-i="enabled">Enabled</span></label>
+    <p class="help" data-i="hSound">Creates the devices “k-link: to radio” (speaker) and “k-link: from radio” (microphone). Select them in your application: whatever it plays is transmitted (PTT by signal).</p>
+    <div class="field"><span data-i="vox">VOX threshold (dBFS)<small data-i="voxH">lower = more sensitive</small></span><input type="number" step="1" data-k="soundcard.vox_threshold_db"></div>
+    <div class="field"><span data-i="hang">Release PTT after silence (s)</span><input type="number" step="0.1" data-k="soundcard.vox_hang"></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i="safety">PTT safety</h2>
+    <div class="field"><span data-i="txTimeout">Maximum transmission (s)</span><input type="number" data-k="ptt.tx_timeout"></div>
+    <div class="field"><span data-i="netHang">Unkey after network silence (s)</span><input type="number" step="0.1" data-k="ptt.net_hang"></div>
+    <div class="row" style="margin-top:12px"><button id="bSave" data-i="save">Save and apply</button><span id="saved" class="help"></span></div>
+  </section>
+
+  <section class="card wide">
+    <h2 data-i="activity">Activity</h2>
+    <ul id="log"></ul>
+  </section>
+</main>
+<script>
+const ES = (navigator.language||"en").toLowerCase().startsWith("es");
+const T = ES ? {
+ radio:"Radio",toRadio:"A la radio (TX)",fromRadio:"Desde la radio (RX)",actions:"Acciones",
+ pair:"Emparejar adaptador",test:"Prueba de eco",beep:"Transmitir pitidos",
+ hPair:"Emparejar: apaga el micro y pon el adaptador en modo emparejamiento (LED parpadeando rápido).",
+ hTest:"Prueba de eco: pon antes la radio en un canal de eco/loro (DMR TG 9990).",
+ enabled:"Activado",listenPort:"k-link escucha en el puerto",remoteHost:"Enviar a la máquina",
+ remotePort:"Enviar al puerto",aslNode:"Nodo privado ASL para la radio",
+ hAsl:"Añade esto a /etc/asterisk/rpt.conf en la máquina de ASL, reinicia Asterisk y enlázalo con tu nodo (*3 + nodo):",
+ copy:"Copiar",copied:"Copiado",sound:"Tarjeta de sonido (EchoLink/SvxLink, APRS, …)",
+ hSound:"Crea los dispositivos «k-link: to radio» (altavoz) y «k-link: from radio» (micrófono). Elígelos en tu aplicación: lo que reproduzca se transmite (PTT por señal).",
+ vox:"Umbral VOX (dBFS)",voxH:"más bajo = más sensible",hang:"Soltar PTT tras silencio (s)",
+ safety:"Seguridad del PTT",txTimeout:"Transmisión máxima (s)",netHang:"Soltar tras silencio de red (s)",
+ save:"Guardar y aplicar",activity:"Actividad",idle:"En espera",tx:"Transmitiendo",rx:"Recibiendo",
+ busy:"Ocupado",unpaired:"Sin adaptador",btOk:"Adaptador conectado",btBad:"Adaptador desconectado",
+ btNone:"Sin emparejar",by:"por",ago:"hace",restarting:"Guardado, reiniciando…",last:"Última"
+} : {
+ idle:"Idle",tx:"Transmitting",rx:"Receiving",busy:"Busy",unpaired:"No adapter",
+ btOk:"Adapter connected",btBad:"Adapter disconnected",btNone:"Not paired",copied:"Copied",
+ by:"by",ago:"ago",restarting:"Saved, restarting…",last:"Last"
+};
+document.querySelectorAll("[data-i]").forEach(e=>{const k=e.dataset.i;if(T[k])e.textContent=T[k]});
+const $=s=>document.querySelector(s);
+const lamp=$("#lamp"), LAMP={idle:"—",tx:"TX",rx:"RX",busy:"…",unpaired:"?"};
+let cfg={};
+
+function meter(id,db){const p=Math.max(0,Math.min(100,(db+60)/60*100));
+ $(id+" i").style.width=p+"%";$(id+" .v").textContent=db>-90?db.toFixed(0)+" dBFS":"";}
+function ago(t){const s=Math.round(Date.now()/1000-t);return s<60?s+" s":Math.round(s/60)+" min";}
+function status(s){
+ lamp.className=s.state;lamp.textContent=LAMP[s.state]||"";
+ $("#stateTxt").textContent=T[s.state]||s.state;
+ $("#stateSub").textContent=s.state==="tx"&&s.tx_owner?`${T.by} ${s.tx_owner}`:(s.mac||"");
+ const bt=$("#bt");
+ if(!s.mac){bt.className="pill bad";bt.textContent=T.btNone}
+ else if(s.link_up){bt.className="pill ok";bt.textContent=T.btOk}
+ else{bt.className="pill bad";bt.textContent=T.btBad}
+ $("#links").textContent=s.links.join(" · ");
+ meter("#mTx",s.level.tx);meter("#mRx",s.level.rx);
+ $("#nTx").textContent=s.stats.tx;$("#nRx").textContent=s.stats.rx;
+ const l=[s.stats.last_tx&&["TX",s.stats.last_tx],s.stats.last_rx&&["RX",s.stats.last_rx]]
+   .filter(Boolean).sort((a,b)=>b[1].t-a[1].t)[0];
+ $("#lastAct").textContent=l?`${T.last}: ${l[0]} ${l[1].dur.toFixed(1)} s, ${T.ago} ${ago(l[1].t)}`:"";
+ const free=s.state==="idle";
+ $("#bPair").disabled=!free&&s.state!=="unpaired";
+ $("#bTest").disabled=$("#bBeep").disabled=!free||!s.mac||!s.link_up;
+}
+function addLog(e){const li=document.createElement("li");
+ li.innerHTML=`<span class="t">${new Date(e.t*1000).toLocaleTimeString()}</span>`;
+ const m=document.createElement("span");m.className=e.level;m.textContent=e.msg;li.appendChild(m);
+ const ul=$("#log");ul.prepend(li);while(ul.children.length>200)ul.lastChild.remove();
+ if(/^test: end/.test(e.msg)){const a=$("#testAudio");a.src="/api/test.wav?"+Date.now();a.hidden=false}}
+
+function connect(){const es=new EventSource("/api/events");
+ es.addEventListener("status",m=>status(JSON.parse(m.data)));
+ es.addEventListener("event",m=>addLog(JSON.parse(m.data)));
+ es.onerror=()=>{es.close();setTimeout(connect,2000)};}
+
+async function post(url,body){const r=await fetch(url,{method:"POST",
+ headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):""});
+ const j=await r.json().catch(()=>({}));if(!r.ok)alert(j.error||r.status);return j;}
+$("#bPair").onclick=()=>post("/api/pair");
+$("#bTest").onclick=()=>post("/api/test");
+$("#bBeep").onclick=()=>post("/api/beep");
+
+function aslSnip(){const n=$("#aslNode").value||"1922";
+ const lp=cfg.usrp?.listen_port||34001, rp=cfg.usrp?.remote_port||32001;
+ const host=location.hostname==="localhost"?"127.0.0.1":location.hostname;
+ $("#aslSnip").textContent=`[nodes]\n${n} = radio@127.0.0.1/${n},NONE\n\n[${n}](node-main)\nrxchannel = USRP/${host}:${lp}:${rp}   ; k-link`;}
+$("#aslNode").oninput=aslSnip;
+$("#bCopy").onclick=()=>{navigator.clipboard?.writeText($("#aslSnip").textContent);
+ $("#bCopy").textContent=T.copied||"Copied";setTimeout(()=>$("#bCopy").textContent=T.copy||"Copy",1500)};
+
+async function loadCfg(){cfg=await (await fetch("/api/config")).json();
+ document.querySelectorAll("[data-k]").forEach(e=>{const [s,k]=e.dataset.k.split(".");
+  const v=cfg[s]?.[k];if(e.type==="checkbox")e.checked=!!v;else if(v!==undefined)e.value=v;});
+ aslSnip();}
+$("#bSave").onclick=async()=>{const out={};
+ document.querySelectorAll("[data-k]").forEach(e=>{const [s,k]=e.dataset.k.split(".");
+  (out[s]=out[s]||{})[k]=e.type==="checkbox"?e.checked:e.value;});
+ const j=await post("/api/config",out);if(j.ok){$("#saved").textContent=T.restarting;
+  setTimeout(()=>location.reload(),3000);}};
+loadCfg();connect();
+</script>
+</body>
+</html>

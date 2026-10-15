@@ -1,12 +1,17 @@
 # k-link
 
 Radio gateway through a **Bluetooth K-plug PTT adapter**: link a handheld
-radio to AllStarLink, DVSwitch and anything else that speaks **USRP**, with
-no cables or sound card between the computer and the radio.
+radio to AllStarLink, DVSwitch, EchoLink (SvxLink), APRS and any other audio
+application, with no cables or sound card between the computer and the radio.
 
 ```
-radio ──K plug── BT adapter ))) Bluetooth ((( k-link ──USRP/UDP── ASL / DVSwitch / ...
+                                             ┌─ USRP/UDP ── AllStarLink / DVSwitch
+radio ──K plug── BT adapter ))) Bluetooth ((( k-link
+                                             └─ virtual sound card ── SvxLink, Direwolf, ...
 ```
+
+Everything can be done from a **web page** (status, levels, pairing, test,
+settings) or from the command line.
 
 Wireless speaker-mic kits (sold under Abbree and other brands) come with two
 pieces: the speaker-mic and a small adapter that plugs into the radio's
@@ -45,7 +50,7 @@ So no VOX or audio-level detection is needed: the adapter does it.
 Debian / Raspberry Pi OS / Ubuntu (pulls in BlueZ and PipeWire):
 
 ```sh
-sudo apt install ./k-link_0.1.0_all.deb    # build it with packaging/build-deb.sh
+sudo apt install ./k-link_0.2.0_all.deb    # build it with packaging/build-deb.sh
 ```
 
 or anywhere with Python 3.9+:
@@ -103,7 +108,31 @@ sudo loginctl enable-linger $USER   # start at boot without logging in
 k-link status
 ```
 
+## Web UI
+
+`k-link run` (and the service) serves a page on port **8077**: live state
+(idle / TX / RX), TX and RX level meters, activity log, buttons to pair the
+adapter, run the loop test (and listen to its recording) and transmit test
+beeps, and the settings below. It asks for the password written by
+`k-link config` (any user name); with no password set it only listens on
+localhost.
+
 ## Connecting it
+
+### Virtual sound card
+
+With `[soundcard] enabled = yes` two devices appear on the system:
+
+- **k-link: to radio** (speaker): whatever an application plays here is
+  transmitted. PTT by signal (VOX) with a short pre-roll so the first
+  syllable is not lost, released after `vox_hang` seconds of silence.
+- **k-link: from radio** (microphone): what the radio receives. The adapter
+  only sends audio while the radio is receiving, so an application's own
+  squelch/VOX detection works well.
+
+Select them in SvxLink (EchoLink), Direwolf (APRS), Mumble, fldigi, ...
+
+### USRP
 
 k-link listens on `listen_port` for audio to transmit and sends what the
 radio receives to `remote_host:remote_port`.
@@ -153,7 +182,18 @@ talkgroup = 0
 [ptt]
 tx_timeout = 180          ; hard limit for one transmission
 net_hang = 0.5            ; unkey after this much network silence
-rx_ignore_after_tx = 1.5  ; the adapter opens a ~1 s call after unkeying
+rx_ignore_after_tx = 2.0  ; the adapter opens a ~1 s call after unkeying
+
+[soundcard]
+enabled = no
+vox_threshold_db = -45    ; level that keys the radio
+vox_hang = 1.0            ; silence that releases it
+vox_preroll = 0.3         ; audio kept from before the VOX triggers
+
+[web]
+enabled = yes
+port = 8077
+password = <random>
 ```
 
 Half duplex: while the radio is receiving, network audio is dropped.
@@ -169,6 +209,11 @@ Half duplex: while the radio is receiving, network audio is dropped.
 - **No audio nodes** (`k-link status` shows no call while keyed): check that
   PipeWire handles Bluetooth (`wpctl status` lists the adapter) and the
   headless WirePlumber setting above.
+- **Why k-link rewires the adapter's audio**: in the Hands-Free role PipeWire
+  presents the adapter like a phone call whose audio follows the default
+  speaker and microphone (the radio would sound on the PC speakers and the PC
+  microphone would transmit). k-link points those streams at an internal
+  silent node (which also provides the audio clock) and cuts any other link.
 
 ## License
 

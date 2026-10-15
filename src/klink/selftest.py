@@ -11,10 +11,8 @@ import subprocess
 import time
 import wave
 
+from .audio import RATE, bluez_nodes, pw_cat, stop_proc
 from .bt import Adapter
-from .gateway import bluez_nodes, pw_cat, stop_proc
-
-RATE = 8000
 
 
 def test_signal():
@@ -45,7 +43,7 @@ def load_wav(path):
 
 
 def level(pcm):
-    a = struct.unpack("<%dh" % (len(pcm) // 2), pcm)
+    a = struct.unpack("<%dh" % (len(pcm) // 2), pcm[:len(pcm) & ~1])
     if not a:
         return -99.0, -99.0
     peak = max(abs(x) for x in a) or 1
@@ -81,10 +79,18 @@ async def loop_test(mac, pcm, out_path, wait=20, say=print):
             return False
         await asyncio.sleep(0.5)          # let the radio settle into TX
         player = await pw_cat("play", out)
+        t_play = time.monotonic()
         player.stdin.write(pcm)
         await player.stdin.drain()
         player.stdin.close()
-        await asyncio.wait_for(player.wait(), sent + 5)
+        # pw-play does not always exit at EOF: give it the audio's duration
+        # (plus its latency) and stop it ourselves
+        try:
+            await asyncio.wait_for(
+                player.wait(), max(0.1, sent + 0.5 - (time.monotonic()
+                                                      - t_play)))
+        except asyncio.TimeoutError:
+            await stop_proc(player)
     finally:
         await bt.ptt_up()
     t_unkey = time.monotonic()
@@ -92,24 +98,34 @@ async def loop_test(mac, pcm, out_path, wait=20, say=print):
     say(f"listening up to {wait} s for the echo ...")
     got = bytearray()
     first = None
+    last_end = None
     end = t_unkey + wait
+    # the adapter closes its RX call on every pause, so the echo may come in
+    # several pieces: collect them until 3 s pass with nothing new. Short
+    # calls (the adapter's ~1 s post-TX tail) don't count as the echo.
     while time.monotonic() < end:
+        if last_end and time.monotonic() - last_end > 3:
+            break
         inp = next((x for x in await bluez_nodes(mac) if "input" in x), None)
         if not inp:
             await asyncio.sleep(0.1)
             continue
-        first = first or time.monotonic() - t_unkey
+        t_seg = time.monotonic()
+        seg = bytearray()
         rec = await pw_cat("rec", inp)
         while time.monotonic() < end:
             try:
-                got += await asyncio.wait_for(rec.stdout.read(3200), 0.2)
+                seg += await asyncio.wait_for(rec.stdout.read(3200), 0.2)
             except asyncio.TimeoutError:
                 pass
             if inp not in await bluez_nodes(mac):
                 break
         await stop_proc(rec)
-        if len(got) / 2 / RATE > sent * 0.5:
-            break                         # got the echo, don't wait more
+        tail = t_seg - t_unkey < 2.5 and time.monotonic() - t_seg < 1.5
+        if not tail:
+            first = first or t_seg - t_unkey
+            got += seg[:len(seg) & ~1]      # whole samples only
+            last_end = time.monotonic()
     if not got:
         say("FAIL: nothing received (is the radio on an echo channel?)")
         return False

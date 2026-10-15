@@ -5,6 +5,7 @@ import configparser
 import fcntl
 import logging
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ DEFAULT_CONFIG = """\
 mac =
 
 [usrp]
+enabled = yes
 # k-link listens here for audio to transmit...
 listen_host = 0.0.0.0
 listen_port = 34001
@@ -31,13 +33,28 @@ remote_host = 127.0.0.1
 remote_port = 32001
 talkgroup = 0
 
+[soundcard]
+# virtual sound card "k-link: to radio" / "k-link: from radio"
+enabled = no
+# PTT by signal: level that keys the radio, and silence that releases it
+vox_threshold_db = -45
+vox_hang = 1.0
+# audio kept from before the VOX triggers, so the first syllable is sent
+vox_preroll = 0.3
+
 [ptt]
 # hard limit for one transmission, seconds
 tx_timeout = 180
 # unkey when the network goes quiet this long without an explicit unkey
 net_hang = 0.5
 # after unkeying the adapter opens a ~1 s "call" (tail): don't take it as RX
-rx_ignore_after_tx = 1.5
+rx_ignore_after_tx = 2.0
+
+[web]
+enabled = yes
+port = 8077
+# without a password the web UI only listens on this computer (localhost)
+password = {password}
 """
 
 UNIT = """\
@@ -65,13 +82,13 @@ def find_config(path):
     return None
 
 
-def load_config(path):
+def load_config(path, need_mac=True):
     p = find_config(path)
     if not p:
         sys.exit("no config found; create one with: k-link config")
     cfg = configparser.ConfigParser()
     cfg.read(p)
-    if not cfg.get("bluetooth", "mac", fallback=""):
+    if need_mac and not cfg.get("bluetooth", "mac", fallback=""):
         sys.exit(f"{p}: no adapter MAC yet; run: k-link pair")
     return p, cfg
 
@@ -92,7 +109,7 @@ def write_config(path, mac=None):
     if path.exists():
         text = path.read_text()
     else:
-        text = DEFAULT_CONFIG
+        text = DEFAULT_CONFIG.format(password=secrets.token_urlsafe(9))
     if mac:
         lines = text.splitlines()
         lines = [f"mac = {mac}" if ln.strip().startswith("mac") else ln
@@ -103,10 +120,13 @@ def write_config(path, mac=None):
 
 def cmd_run(a):
     from .gateway import Gateway
-    path, cfg = load_config(a.config)
+    from .web import Web
+    path, cfg = load_config(a.config, need_mac=False)
     _lock = lock()
     logging.getLogger("k-link").info("config %s", path)
-    asyncio.run(Gateway(cfg).run())
+    web = Web(cfg, path) if cfg.getboolean("web", "enabled",
+                                           fallback=True) else None
+    asyncio.run(Gateway(cfg, path).run(web))
 
 
 def cmd_pair(a):
@@ -131,8 +151,8 @@ def cmd_test(a):
 
 
 def cmd_status(a):
+    from .audio import bluez_nodes
     from .bt import Adapter
-    from .gateway import bluez_nodes
     path, cfg = load_config(a.config)
     mac = cfg.get("bluetooth", "mac")
 
@@ -157,6 +177,10 @@ def cmd_config(a):
     else:
         write_config(path)
         print(f"created {path}")
+        cp = configparser.ConfigParser()
+        cp.read(path)
+        print(f"web UI: http://<this host>:{cp.get('web', 'port')}/  "
+              f"user: any, password: {cp.get('web', 'password')}")
 
 
 def cmd_install_service(a):

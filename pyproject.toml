@@ -14,5 +14,8 @@ dependencies = []
 [project.scripts]
 k-link = "klink.cli:main"
 
+[tool.setuptools.package-data]
+klink = ["web/*.html"]
+
 [tool.setuptools.dynamic]
 version = { attr = "klink.__version__" }
