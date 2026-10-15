@@ -190,9 +190,9 @@ def main():
     sub.add_parser("run", help="run the gateway").set_defaults(f=cmd_run)
     p = sub.add_parser("pair", help="pair the K-plug adapter")
     p.add_argument("--timeout", type=int, default=120)
-    p.add_argument("--as-name", default="KST_vHMIC010",
-                   help="Bluetooth name of the speaker-mic to impersonate "
-                   "(empty: keep this computer's own name)")
+    p.add_argument("--as-name", default="",
+                   help="also take the speaker-mic's Bluetooth name, e.g. "
+                   "KST_vHMIC010 (not needed for the YHD_BTA512 adapter)")
     p.set_defaults(f=cmd_pair)
     p = sub.add_parser("test", help="loop test through an echo channel")
     p.add_argument("--wav", help="WAV to transmit (default: test beeps)")

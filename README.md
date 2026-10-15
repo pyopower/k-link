@@ -58,8 +58,9 @@ when it can, otherwise allow it once or run `sudo btmgmt class 4 4` before.
 
 Switch the speaker-mic **off**, then put the adapter in pairing mode (fast
 blinking LED). The adapter does not advertise itself: it searches for its
-speaker-mic, so k-link briefly poses as one (name + headset class) until the
-adapter connects. The MAC is saved to the config; afterwards k-link
+speaker-mic, so k-link briefly poses as one (headset device class) until the
+adapter connects. The YHD_BTA512 adapter pairs on the class alone; if another
+model looks for its speaker-mic's name, add `--as-name <name>`. The MAC is saved to the config; afterwards k-link
 reconnects to it by itself.
 
 ### Test
