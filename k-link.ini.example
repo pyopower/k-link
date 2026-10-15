@@ -1,0 +1,20 @@
+[bluetooth]
+# Abbree K-plug adapter (YHD_BTA512...), already paired and trusted
+mac = 56:A0:12:F3:58:71
+
+[usrp]
+# k-link listens here for audio to transmit...
+listen_host = 0.0.0.0
+listen_port = 34001
+# ...and sends received radio audio here (ASL chan_usrp / Analog_Bridge)
+remote_host = 127.0.0.1
+remote_port = 32001
+talkgroup = 0
+
+[ptt]
+# hard limit for a transmission, seconds
+tx_timeout = 180
+# unkey when the network goes quiet for this long without an explicit unkey
+net_hang = 0.5
+# after unkeying the adapter opens a ~1 s "call" (tail): ignore it as RX
+rx_ignore_after_tx = 1.5
