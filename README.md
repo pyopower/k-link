@@ -8,6 +8,7 @@ application, with no cables or sound card between the computer and the radio.
                                              ┌─ USRP/UDP ── AllStarLink / DVSwitch
 radio ──K plug── BT adapter ))) Bluetooth ((( k-link
                                              └─ virtual sound card ── SvxLink, Direwolf, ...
+                                                (+ serial port PTT/COS /dev/ttyKLINK0)
 ```
 
 Everything can be done from a **web page** (status, levels, pairing, test,
@@ -16,6 +17,10 @@ settings) or from the command line.
 Wireless speaker-mic kits (sold under Abbree and other brands) come with two
 pieces: the speaker-mic and a small adapter that plugs into the radio's
 Kenwood-style K connector. k-link takes the place of the speaker-mic.
+
+Status: working and tested end to end (USRP with AllStarLink and DVSwitch
+Analog_Bridge, virtual sound card, serial PTT/COS with Direwolf) on Linux.
+Windows, macOS and Android are not supported.
 
 Tested with the adapter `YHD_BTA512_vKSTK07` (pairs with the `KST_vHMIC010`
 speaker-mic) on a TYT MD-380, Raspberry Pi 5, Raspberry Pi OS (Debian 12).
