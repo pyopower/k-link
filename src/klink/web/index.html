@@ -72,6 +72,13 @@ border:2px solid #fff;box-shadow:0 1px 4px #0006;cursor:pointer}
 .sl{margin:12px 0}.sl label{display:flex;justify-content:space-between;font-size:14px}
 .sl label b{font-variant-numeric:tabular-nums}.sl small{color:var(--mut);font-size:12px}
 input[type=range]{width:100%;accent-color:var(--acc);margin:6px 0 0;height:28px}
+#lk{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid var(--line)}
+#lk li{display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap}
+#lk .dot{width:10px;height:10px;border-radius:50%;background:var(--tx);flex:none}
+#lk .dot.ok{background:var(--rx)}#lk b{min-width:96px}
+#lk .d{color:var(--mut);font-size:12.5px;flex:1 1 140px}
+#lk .a{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--meter);color:var(--mut)}
+#lk .a.tx{background:var(--tx);color:#fff}#lk .a.rx{background:var(--rx);color:#fff}
 .switch{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px}
 pre.snip{background:var(--bg);border:1px solid var(--line);border-radius:10px;
 padding:10px;font-size:12.5px;overflow:auto;margin:8px 0}
@@ -84,7 +91,6 @@ audio{width:100%;margin-top:8px}
 <header>
   <h1><b>k</b>-link</h1>
   <span id="bt" class="pill">…</span>
-  <span id="links" class="pill"></span>
 </header>
 <main>
   <section class="card">
@@ -94,6 +100,7 @@ audio{width:100%;margin-top:8px}
     <div class="meter" id="mTx"><label><span data-i="toRadio">To radio (TX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
     <div class="meter" id="mRx"><label><span data-i="fromRadio">From radio (RX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
     <div class="stat"><span>TX <b id="nTx">0</b></span><span>RX <b id="nRx">0</b></span><span id="lastAct"></span></div>
+    <ul id="lk"></ul>
   </section>
 
   <section class="card">
@@ -158,7 +165,7 @@ const T = ES ? {
  copy:"Copiar",copied:"Copiado",sound:"Tarjeta de sonido (EchoLink/SvxLink, APRS, …)",
  hSound:"Crea los dispositivos «k-link: to radio» (altavoz) y «k-link: from radio» (micrófono). Elígelos en tu aplicación: lo que reproduzca se transmite (PTT por señal).",
  vox:"Umbral VOX",voxH:"La barra muestra en directo el audio de la aplicación (la raya marca los picos recientes). Transmite mientras está verde, pasado el mando naranja: reproduce tu audio habitual y coloca el mando justo por debajo de su nivel.",
- audio:"audio",hang:"Soltar PTT tras silencio",hangH:"Las pausas más cortas que esto no cortan la transmisión.",
+ audio:"audio",scName:"Tarjeta sonido",aIn:"→ radio",aOut:"← radio",lDown:"no funciona",hang:"Soltar PTT tras silencio",hangH:"Las pausas más cortas que esto no cortan la transmisión.",
  safety:"Seguridad del PTT",txTimeout:"Transmisión máxima (s)",netHang:"Soltar tras silencio de red (s)",
  save:"Guardar y aplicar",activity:"Actividad",idle:"En espera",tx:"Transmitiendo",rx:"Recibiendo",
  busy:"Ocupado",unpaired:"Sin adaptador",btOk:"Adaptador conectado",btBad:"Adaptador desconectado",
@@ -184,7 +191,7 @@ function status(s){
  if(!s.mac){bt.className="pill bad";bt.textContent=T.btNone}
  else if(s.link_up){bt.className="pill ok";bt.textContent=T.btOk}
  else{bt.className="pill bad";bt.textContent=T.btBad}
- $("#links").textContent=s.links.join(" · ");
+ links(s.links);
  meter("#mTx",s.level.tx);meter("#mRx",s.level.rx);
  vu(s.level.app??-99);
  $("#nTx").textContent=s.stats.tx;$("#nRx").textContent=s.stats.rx;
@@ -195,6 +202,17 @@ function status(s){
  $("#bPair").disabled=!free&&s.state!=="unpaired";
  $("#bTest").disabled=$("#bBeep").disabled=!free||!s.mac||!s.link_up;
 }
+const LN={usrp:"USRP",soundcard:T.scName||"Sound card"};
+// one row per active link; the tags light up while audio flows that way
+function links(ls){$("#lk").innerHTML="";
+ for(const l of ls){const li=document.createElement("li");
+  const on=a=>a!==null&&a<0.6;
+  li.innerHTML=`<span class="dot ${l.ok?"ok":""}"></span><b></b><span class="d"></span>`+
+   `<span class="a ${on(l.last_in)?"tx":""}">${T.aIn||"→ radio"}</span>`+
+   `<span class="a ${on(l.last_out)?"rx":""}">${T.aOut||"← radio"}</span>`;
+  li.querySelector("b").textContent=LN[l.name]||l.name;
+  li.querySelector(".d").textContent=l.ok?l.detail:(T.lDown||"not running");
+  $("#lk").appendChild(li);}}
 function addLog(e){const li=document.createElement("li");
  li.innerHTML=`<span class="t">${new Date(e.t*1000).toLocaleTimeString()}</span>`;
  const m=document.createElement("span");m.className=e.level;m.textContent=e.msg;li.appendChild(m);

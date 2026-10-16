@@ -10,6 +10,7 @@ import fcntl
 import logging
 import socket
 import struct
+import time
 
 from .audio import FRAME_BYTES, frame_dbfs
 
@@ -36,6 +37,7 @@ class UsrpLink(asyncio.DatagramProtocol):
         self.talkgroup = cfg.getint("usrp", "talkgroup", fallback=0)
         self.seq = 0
         self.transport = None
+        self.last_in = self.last_out = 0.0
 
     async def start(self):
         await asyncio.get_running_loop().create_datagram_endpoint(
@@ -52,6 +54,7 @@ class UsrpLink(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         if len(data) < USRP_HDR.size or data[:4] != b"USRP":
             return
+        self.last_in = time.monotonic()
         _, _, _, keyup, _, typ, _, _ = USRP_HDR.unpack_from(data)
         if typ != USRP_VOICE:
             return
@@ -66,6 +69,12 @@ class UsrpLink(asyncio.DatagramProtocol):
                               self.talkgroup, USRP_VOICE, 0, 0) + audio,
                 self.remote)
             self.seq = (self.seq + 1) & 0xFFFFFFFF
+            self.last_out = time.monotonic()
+
+    def info(self):
+        return {"ok": self.transport is not None,
+                "detail": "%d ⇄ %s:%d" % (self.listen[1], *self.remote),
+                "last_in": self.last_in, "last_out": self.last_out}
 
     def on_rx(self, frame):
         self._send(True, frame)
@@ -98,6 +107,7 @@ class SoundcardLink:
             maxlen=max(1, int(cfg.getfloat("soundcard", "vox_preroll",
                                            fallback=0.3) / 0.02)))
         self.sink = self.source = self.nodes = None
+        self.last_in = self.last_out = 0.0
         self.tasks = []
 
     async def start(self):
@@ -193,6 +203,8 @@ class SoundcardLink:
                 return
             db = self.gw.level["app"] = frame_dbfs(f)
             loud = db > self.threshold
+            if loud:
+                self.last_in = time.monotonic()
             if not active:
                 self.preroll.append(f)
                 if loud:
@@ -220,6 +232,13 @@ class SoundcardLink:
             return
         if t.get_write_buffer_size() <= 2 * FRAME_BYTES:
             t.write(frame)
+            self.last_out = time.monotonic()
+
+    def info(self):
+        procs = (self.sink, self.source, self.nodes)
+        return {"ok": all(p and p.returncode is None for p in procs),
+                "detail": "k-link: to radio / k-link: from radio",
+                "last_in": self.last_in, "last_out": self.last_out}
 
     def on_rx_end(self):
         pass

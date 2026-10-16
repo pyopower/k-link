@@ -69,8 +69,18 @@ class Gateway:
                 "link_up": self.link_up,
                 "mac": self.bt.mac if self.bt else None,
                 "tx_owner": getattr(self.tx_owner, "name", self.tx_owner),
-                "links": [l.name for l in self.links],
+                "links": [self._link_info(l) for l in self.links],
                 "level": self.level, "stats": self.stats}
+
+    @staticmethod
+    def _link_info(link):
+        i = link.info()
+        now = time.monotonic()
+        # seconds since the link last sent audio to / got audio from the radio
+        for k in ("last_in", "last_out"):
+            i[k] = round(now - i[k], 1) if i[k] else None
+        i["name"] = link.name
+        return i
 
     # --- links -> radio
     def tx_frame(self, link, keyup, audio):

@@ -147,7 +147,7 @@ class InternalNodes:
         for name, cls in ((NULL_SINK, "Audio/Sink"),):
             self.proc.stdin.write((
                 "create-node adapter { factory.name=support.null-audio-sink "
-                f"node.name={name} node.description=\"k-link internal\" "
+                f"node.name={name} node.description=\"k-link internal (do not use)\" "
                 f"media.class={cls} audio.channels=1 audio.position=[MONO] "
                 "priority.session=0 priority.driver=0 "
                 "node.want-driver=true node.always-process=true "
