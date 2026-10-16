@@ -181,6 +181,7 @@ class SoundcardLink:
                     self.sink.stdout.readexactly(FRAME_BYTES), 0.1)
             except asyncio.TimeoutError:
                 # nothing is playing: the sink delivers no data at all
+                self.gw.level["app"] = -99.0
                 if active:
                     quiet += 0.1
                     if quiet >= self.hang:
@@ -190,7 +191,8 @@ class SoundcardLink:
             except asyncio.IncompleteReadError:
                 log.error("sound card: 'to radio' stream ended")
                 return
-            loud = frame_dbfs(f) > self.threshold
+            db = self.gw.level["app"] = frame_dbfs(f)
+            loud = db > self.threshold
             if not active:
                 self.preroll.append(f)
                 if loud:

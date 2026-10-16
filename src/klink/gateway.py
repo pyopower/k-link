@@ -49,7 +49,7 @@ class Gateway:
         self.nodes = set()
         self.tx_task = None
         # for the web UI
-        self.level = {"tx": -99.0, "rx": -99.0}
+        self.level = {"tx": -99.0, "rx": -99.0, "app": -99.0}
         self.stats = {"tx": 0, "rx": 0, "last_tx": None, "last_rx": None}
         self.events = collections.deque(maxlen=200)
         self.listeners = set()
