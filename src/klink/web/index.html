@@ -57,7 +57,9 @@ margin:7px 0}
 .field span{font-size:14px}.field small{display:block;color:var(--mut);font-size:12px}
 input[type=text],input[type=number]{font:inherit;width:100%;padding:7px 9px;
 border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
-.vu{position:relative;height:30px;margin-top:6px}
+.z{position:relative;height:3px;margin-top:2px}.z b{position:absolute;top:0;bottom:0;border-radius:2px;background:var(--rx);opacity:.55}
+.zh{display:block;color:var(--mut);font-size:12px;margin-top:4px}
+.vu{position:relative;height:30px;margin-top:6px}.vu .z{position:absolute;left:9px;right:9px;top:23px;margin:0}
 .vu .bar{position:absolute;left:9px;right:9px;top:8px;height:14px}
 .vu .bar i{background:#94a3b8;transition:width .1s}.vu .bar i.on{background:var(--rx)}
 #vuIdle{display:block;font-style:italic;margin-bottom:4px}
@@ -108,8 +110,9 @@ audio{width:100%;margin-top:8px}
     <h2 data-i="radio">Radio</h2>
     <div id="state"><div id="lamp" class="idle">—</div>
       <div><div id="stateTxt">…</div><div id="stateSub"></div></div></div>
-    <div class="meter" id="mTx"><label><span data-i="toRadio">To radio (TX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
-    <div class="meter" id="mRx"><label><span data-i="fromRadio">From radio (RX)</span><span class="v"></span></label><div class="bar"><i></i></div></div>
+    <div class="meter" id="mTx"><label><span data-i="toRadio">To radio (TX)</span><span class="v"></span></label><div class="bar"><i></i></div><div class="z"><b></b></div></div>
+    <div class="meter" id="mRx"><label><span data-i="fromRadio">From radio (RX)</span><span class="v"></span></label><div class="bar"><i></i></div><div class="z"><b></b></div>
+      <small class="zh" data-i="zoneH">The green strip marks the ideal voice level. RX far past it: turn the radio volume down.</small></div>
     <div class="stat"><span>TX <b id="nTx">0</b></span><span>RX <b id="nRx">0</b></span><span id="lastAct"></span></div>
     <ul id="lk"></ul>
   </section>
@@ -145,10 +148,10 @@ audio{width:100%;margin-top:8px}
     <div class="seg" id="ctl"><label><input type="radio" name="ctl" value="vox" data-k="soundcard.control"><span data-i="ctlVox">PTT by signal (VOX)</span></label><label><input type="radio" name="ctl" value="serial" data-k="soundcard.control"><span data-i="ctlSer">PTT by serial port</span></label></div>
     <div id="boxVox">
     <div class="sl"><label><span data-i="vox">VOX threshold</span><b id="vVox"></b></label>
-      <div class="vu"><div class="bar" id="vu"><i></i><s></s></div>
+      <div class="vu"><div class="bar" id="vu"><i></i><s></s></div><div class="z"><b></b></div>
       <input type="range" min="-60" max="-10" step="1" data-k="soundcard.vox_threshold_db" id="rVox"></div>
       <small id="vuIdle" class="idle" data-i="vuIdle">No application is playing into “k-link: to radio” right now.</small>
-      <small data-i="voxH">The bar shows the application audio live (the line marks recent peaks). It transmits while the bar is green, past the orange handle: play your usual audio and place the handle just below its level.</small></div>
+      <small data-i="voxH">The bar shows the application audio live (the line marks recent peaks). It transmits while the bar is green, past the orange handle: play your usual audio and place the handle just below its level. The green strip below is the ideal level.</small></div>
     <div class="sl"><label><span data-i="hang">Release PTT after silence</span><b id="vHang"></b></label>
       <input type="range" min="0.2" max="5" step="0.1" data-k="soundcard.vox_hang" id="rHang">
       <small data-i="hangH">Short pauses shorter than this don't cut the transmission.</small></div>
@@ -177,7 +180,7 @@ audio{width:100%;margin-top:8px}
 <script>
 const ES = (navigator.language||"en").toLowerCase().startsWith("es");
 const T = ES ? {
- radio:"Radio",toRadio:"A la radio (TX)",fromRadio:"Desde la radio (RX)",actions:"Acciones",
+ radio:"Radio",toRadio:"A la radio (TX)",fromRadio:"Desde la radio (RX)",zoneH:"La franja verde marca el nivel ideal de voz. Si RX la sobrepasa mucho, baja el volumen de la radio.",actions:"Acciones",
  pair:"Emparejar adaptador",test:"Prueba de eco",beep:"Transmitir pitidos",
  hPair:"Emparejar: apaga el micro y pon el adaptador en modo emparejamiento (LED parpadeando rápido).",
  hTest:"Prueba de eco: pon antes la radio en un canal de eco/loro (DMR TG 9990).",
@@ -186,7 +189,7 @@ const T = ES ? {
  hAsl:"Añade esto a /etc/asterisk/rpt.conf en la máquina de ASL, reinicia Asterisk y enlázalo con tu nodo (*3 + nodo):",
  copy:"Copiar",copied:"Copiado",sound:"Tarjeta de sonido (EchoLink/SvxLink, APRS, …)",
  hSound:"Crea los dispositivos «k-link: to radio» (altavoz) y «k-link: from radio» (micrófono). Elígelos en tu aplicación: lo que reproduzca se transmite (PTT por señal).",
- vox:"Umbral VOX",voxH:"La barra muestra en directo el audio de la aplicación (la raya marca los picos recientes). Transmite mientras está verde, pasado el mando naranja: reproduce tu audio habitual y coloca el mando justo por debajo de su nivel.",
+ vox:"Umbral VOX",voxH:"La barra muestra en directo el audio de la aplicación (la raya marca los picos recientes). Transmite mientras está verde, pasado el mando naranja: reproduce tu audio habitual y coloca el mando justo por debajo de su nivel. La franja verde de debajo es el nivel ideal.",
  audio:"audio",ctlVox:"PTT por señal (VOX)",ctlSer:"PTT por puerto serie",
  hSer:"En tu aplicación elige este puerto serie para el PTT y el squelch (COS). La radio transmite mientras la aplicación activa la línea de PTT, y la aplicación ve el squelch abierto en CTS y DCD mientras la radio recibe.",
  serDev:"Puerto serie",serPin:"Línea de PTT",lOpen:"en uso",
@@ -205,6 +208,12 @@ const $=s=>document.querySelector(s);
 const lamp=$("#lamp"), LAMP={idle:"—",tx:"TX",rx:"RX",busy:"…",unpaired:"?"};
 let cfg={};
 
+// ideal voice level (RMS dBFS), drawn under each meter on its own scale
+const ZONE=[-26,-12];
+function zone(sel,lo,hi){document.querySelectorAll(sel).forEach(b=>{
+ const f=d=>Math.max(0,Math.min(100,(d-lo)/(hi-lo)*100));
+ b.style.left=f(ZONE[0])+"%";b.style.width=(f(ZONE[1])-f(ZONE[0]))+"%"})}
+zone(".meter .z b",-60,0);zone(".vu .z b",-60,-10);
 function meter(id,db){const p=Math.max(0,Math.min(100,(db+60)/60*100));
  $(id+" i").style.width=p+"%";$(id+" .v").textContent=db>-90?db.toFixed(0)+" dBFS":"";}
 function ago(t){const s=Math.round(Date.now()/1000-t);return s<60?s+" s":Math.round(s/60)+" min";}
