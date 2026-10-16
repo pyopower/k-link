@@ -104,6 +104,10 @@ PASS
 It checks PTT, both audio paths and the RX detection, and warns when the
 received level is too high or too low.
 
+**Radio volume**: the K connector's audio output is strong, so the volume
+knob usually belongs near its minimum (on the MD-380, 2–3 steps above it).
+Adjust it until `k-link test` reports a peak of roughly -10 to -6 dBFS.
+
 ### Run as a service
 
 ```sh
