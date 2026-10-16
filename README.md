@@ -132,6 +132,15 @@ With `[soundcard] enabled = yes` two devices appear on the system:
 
 Select them in SvxLink (EchoLink), Direwolf (APRS), Mumble, fldigi, ...
 
+Applications that use ALSA directly (Direwolf, SvxLink `alsa:`) need
+`pipewire-alsa`, and then find both directions as the ALSA device
+**`klink`** (`ADEVICE klink` in Direwolf). The .deb installs it; otherwise
+copy `packaging/alsa-k-link.conf` to `/etc/alsa/conf.d/60-k-link.conf`.
+It does not change the system's default sound device.
+
+Data modes (APRS, packet) only survive an analog FM channel: a digital
+voice codec (DMR AMBE, ...) destroys the tones.
+
 ### Serial port PTT/COS
 
 Instead of VOX, an application can key the radio through a virtual serial

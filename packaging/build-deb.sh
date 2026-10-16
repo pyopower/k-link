@@ -17,6 +17,9 @@ main()
 SH
 chmod 755 "$ROOT/usr/bin/k-link"
 cp packaging/k-link.service "$ROOT/usr/lib/systemd/user/"
+mkdir -p "$ROOT/usr/share/alsa/alsa.conf.d" "$ROOT/etc/alsa/conf.d"
+cp packaging/alsa-k-link.conf "$ROOT/usr/share/alsa/alsa.conf.d/60-k-link.conf"
+ln -s /usr/share/alsa/alsa.conf.d/60-k-link.conf "$ROOT/etc/alsa/conf.d/60-k-link.conf"
 mkdir -p "$ROOT/usr/lib/udev/rules.d"
 PYTHONPATH=src python3 -c 'from klink.cli import UDEV_RULES; print(UDEV_RULES, end="")' \
     > "$ROOT/usr/lib/udev/rules.d/60-k-link.rules"
@@ -36,7 +39,7 @@ Version: $VER
 Architecture: all
 Maintainer: C31AG <adan@tecnofutura.net>
 Depends: python3 (>= 3.9), bluez, pipewire, pipewire-bin, wireplumber, libspa-0.2-bluetooth
-Recommends: sox, pipewire-pulse
+Recommends: sox, pipewire-pulse, pipewire-alsa
 Section: hamradio
 Priority: optional
 Homepage: https://github.com/pyopower/k-link
