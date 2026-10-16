@@ -24,11 +24,16 @@ Windows, macOS and Android are not supported.
 
 **Reference hardware.** k-link was developed and tested with the K-plug
 adapter that comes with the **Abbree Bluetooth wireless speaker-mic** kit
-(adapter + speaker-mic, [Abbree Wireless Bluetooth Speaker Microphone](https://abbree.com/products/abbree-wireless-bluetooth-speaker-microphone)). It shows up on Bluetooth as `YHD_BTA512_vKSTK07`;
-its speaker-mic as `KST_vHMIC010`. Only the adapter is used: the
-speaker-mic stays off. Test setup: TYT MD-380, Raspberry Pi 5, Raspberry Pi
-OS (Debian 12). Other kits built around the same adapter should behave the
-same; different models may need small changes.
+(adapter + speaker-mic,
+[Abbree Wireless Bluetooth Speaker Microphone](https://abbree.com/products/abbree-wireless-bluetooth-speaker-microphone)).
+It shows up on Bluetooth as `YHD_BTA512_vKSTK07`; its speaker-mic as
+`KST_vHMIC010`. Only the adapter is used: the speaker-mic stays off.
+The adapter does not seem to be sold on its own, but there is a
+[smaller, cheaper kit](https://www.aliexpress.com/item/1005006638451340.html)
+(compact speaker-mic, not IP67) with the same adapter. Test setup: TYT
+MD-380, Raspberry Pi 5, Raspberry Pi OS (Debian 12). Other kits built
+around the same adapter should behave the same; different models may need
+small changes.
 
 ## How it works
 
