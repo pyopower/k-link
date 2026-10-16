@@ -132,6 +132,32 @@ With `[soundcard] enabled = yes` two devices appear on the system:
 
 Select them in SvxLink (EchoLink), Direwolf (APRS), Mumble, fldigi, ...
 
+### Serial port PTT/COS
+
+Instead of VOX, an application can key the radio through a virtual serial
+port, like a classic radio interface: `/dev/ttyKLINK0`.
+
+- **PTT**: the application raises **RTS** (or DTR, `serial_ptt_pin`); the
+  radio transmits what is playing on "k-link: to radio" until it drops it.
+- **COS / squelch**: **CTS** and **DCD** are on while the radio receives.
+  **DSR** is always on ("device present").
+
+The port is a real character device built with CUSE (part of the stock
+Linux kernel), so it works with anything that does serial PTT: SvxLink
+(`PTT_TYPE=SerialPin`, `SQL_DET=SERIAL`), Direwolf (`PTT /dev/ttyKLINK0
+RTS`), fldigi, ... Allow it once, then choose "PTT by serial port" in the
+web UI (or set `control = serial`):
+
+```sh
+k-link setup-serial      # asks for sudo
+```
+
+This creates group `klink` (allowed to create CUSE devices: only k-link
+should need it), adds you to it and to `dialout`, and installs a udev rule
+so the port belongs to group `dialout`. Very short PTT pulses (< 0.1 s,
+e.g. when an application opens the port) are ignored, and the radio is
+unkeyed when the application closes the port.
+
 ### USRP
 
 k-link listens on `listen_port` for audio to transmit and sends what the
@@ -189,6 +215,10 @@ enabled = no
 vox_threshold_db = -45    ; level that keys the radio
 vox_hang = 1.0            ; silence that releases it
 vox_preroll = 0.3         ; audio kept from before the VOX triggers
+control = vox             ; vox, or serial: PTT/COS by /dev/ttyKLINK0
+serial_device = ttyKLINK0
+serial_ptt_pin = rts      ; rts or dtr
+serial_cos_pins = cts,dcd ; lines raised while the radio receives
 
 [web]
 enabled = yes

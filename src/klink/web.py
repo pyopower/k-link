@@ -24,8 +24,9 @@ log = logging.getLogger("k-link")
 EDITABLE = {
     "usrp": {"enabled": bool, "listen_port": int, "remote_host": str,
              "remote_port": int, "talkgroup": int},
-    "soundcard": {"enabled": bool, "vox_threshold_db": float,
-                  "vox_hang": float, "vox_preroll": float},
+    "soundcard": {"enabled": bool, "control": ("vox", "serial"),
+                  "vox_threshold_db": float, "vox_hang": float,
+                  "vox_preroll": float, "serial_ptt_pin": ("rts", "dtr")},
     "ptt": {"tx_timeout": float, "net_hang": float,
             "rx_ignore_after_tx": float},
     "web": {"port": int},
@@ -210,6 +211,8 @@ class Web:
                 if typ is bool:
                     v = self.cfg.getboolean(sec, k)
                 out[sec][k] = v
+        out["soundcard"].setdefault("control", "vox")
+        out["soundcard"].setdefault("serial_ptt_pin", "rts")
         out["bluetooth"] = {"mac": self.cfg.get("bluetooth", "mac",
                                                 fallback="")}
         out["_host_port"] = self.port
@@ -231,6 +234,9 @@ class Web:
                         continue
                     if typ is bool:
                         v = "yes" if v in (True, "true", "yes", "1") else "no"
+                    elif isinstance(typ, tuple):
+                        if v not in typ:
+                            raise ValueError(f"{sec}.{k}: {v!r}")
                     else:
                         v = str(typ(v))
                     cp.set(sec, k, v)

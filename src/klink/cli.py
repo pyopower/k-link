@@ -1,4 +1,5 @@
-"""k-link command line: run | pair | test | status | config | install-service."""
+"""k-link command line: run | pair | test | status | config | install-service
+| setup-serial."""
 import argparse
 import asyncio
 import configparser
@@ -41,6 +42,13 @@ vox_threshold_db = -45
 vox_hang = 1.0
 # audio kept from before the VOX triggers, so the first syllable is sent
 vox_preroll = 0.3
+# PTT control: vox (by signal) or serial (an application drives the RTS/DTR
+# line of the virtual serial port /dev/ttyKLINK0; CTS and DCD give it the
+# squelch/COS). serial needs, once: k-link setup-serial
+control = vox
+serial_device = ttyKLINK0
+serial_ptt_pin = rts
+serial_cos_pins = cts,dcd
 
 [ptt]
 # hard limit for one transmission, seconds
@@ -202,6 +210,41 @@ def cmd_install_service(a):
               f"  sudo loginctl enable-linger {user}")
 
 
+UDEV_RULES = """\
+# k-link: virtual serial port for PTT/COS (see k-link setup-serial)
+# members of group klink may create CUSE devices (k-link's serial port)
+KERNEL=="cuse", OPTIONS+="static_node=cuse", GROUP="klink", MODE="0660"
+# the port itself: for any application run by a dialout member
+SUBSYSTEM=="cuse", KERNEL=="ttyKLINK*", GROUP="dialout", MODE="0660", \
+  ENV{ID_MM_DEVICE_IGNORE}="1"
+"""
+
+
+def cmd_setup_serial(a):
+    """One-time root setup for the virtual serial port."""
+    user = os.environ.get("SUDO_USER") or os.environ.get("USER", "")
+    packaged = Path("/usr/lib/udev/rules.d/60-k-link.rules")
+    rules = Path("/etc/udev/rules.d/60-k-link.rules")
+    script = ["set -e", "getent group klink >/dev/null || groupadd -r klink",
+              f"usermod -aG klink,dialout {user}"]
+    if not packaged.exists():
+        script.append(f"cat > {rules} <<'EOF'\n{UDEV_RULES}EOF")
+    script += ["udevadm control --reload",
+               # effective now, without logging in again
+               "chgrp klink /dev/cuse && chmod 0660 /dev/cuse",
+               f"setfacl -m u:{user}:rw /dev/cuse 2>/dev/null || true"]
+    cmd = ["sh", "-c", "\n".join(script)]
+    if os.geteuid() != 0:
+        print("needs root: running it through sudo")
+        cmd = ["sudo"] + cmd
+    if subprocess.run(cmd).returncode:
+        sys.exit("setup failed")
+    print(f"done: {user} may now create /dev/ttyKLINK0 (applications using "
+          "it must run as a member of group dialout).\n"
+          "Set [soundcard] control = serial (or choose it in the web UI) "
+          "and restart k-link.")
+
+
 def main():
     ap = argparse.ArgumentParser(
         prog="k-link",
@@ -229,6 +272,8 @@ def main():
                    ).set_defaults(f=cmd_config)
     sub.add_parser("install-service", help="install the systemd user service"
                    ).set_defaults(f=cmd_install_service)
+    sub.add_parser("setup-serial", help="allow the virtual serial port for "
+                   "PTT/COS (asks for sudo)").set_defaults(f=cmd_setup_serial)
     a = ap.parse_args()
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")

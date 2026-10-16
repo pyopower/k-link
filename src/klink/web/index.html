@@ -80,6 +80,16 @@ input[type=range]{width:100%;accent-color:var(--acc);margin:6px 0 0;height:28px}
 #lk .d{color:var(--mut);font-size:12.5px;flex:1 1 140px}
 #lk .a{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--meter);color:var(--mut)}
 #lk .a.tx{background:var(--tx);color:#fff}#lk .a.rx{background:var(--rx);color:#fff}
+.seg{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
+.seg label{flex:1 1 140px;display:flex;gap:6px;align-items:center;padding:8px 10px;
+border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:14px}
+.seg label:has(input:checked){border-color:var(--acc);background:#2563eb18}
+select{font:inherit;width:100%;padding:7px 9px;border-radius:8px;border:1px solid var(--line);
+background:var(--bg);color:var(--fg)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace}
+#serLeds .a{font-size:12px;padding:2px 9px;border-radius:99px;background:var(--meter);color:var(--mut)}
+#serLeds .a.on{background:var(--acc);color:#fff}#serLeds #lPtt.on{background:var(--tx)}
+#serLeds #lCos.on{background:var(--rx)}
 .switch{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px}
 pre.snip{background:var(--bg);border:1px solid var(--line);border-radius:10px;
 padding:10px;font-size:12.5px;overflow:auto;margin:8px 0}
@@ -132,6 +142,8 @@ audio{width:100%;margin-top:8px}
     <h2 data-i="sound">Sound card (EchoLink/SvxLink, APRS, …)</h2>
     <label class="switch"><input type="checkbox" data-k="soundcard.enabled"> <span data-i="enabled">Enabled</span></label>
     <p class="help" data-i="hSound">Creates the devices “k-link: to radio” (speaker) and “k-link: from radio” (microphone). Select them in your application: whatever it plays is transmitted (PTT by signal).</p>
+    <div class="seg" id="ctl"><label><input type="radio" name="ctl" value="vox" data-k="soundcard.control"><span data-i="ctlVox">PTT by signal (VOX)</span></label><label><input type="radio" name="ctl" value="serial" data-k="soundcard.control"><span data-i="ctlSer">PTT by serial port</span></label></div>
+    <div id="boxVox">
     <div class="sl"><label><span data-i="vox">VOX threshold</span><b id="vVox"></b></label>
       <div class="vu"><div class="bar" id="vu"><i></i><s></s></div>
       <input type="range" min="-60" max="-10" step="1" data-k="soundcard.vox_threshold_db" id="rVox"></div>
@@ -140,6 +152,14 @@ audio{width:100%;margin-top:8px}
     <div class="sl"><label><span data-i="hang">Release PTT after silence</span><b id="vHang"></b></label>
       <input type="range" min="0.2" max="5" step="0.1" data-k="soundcard.vox_hang" id="rHang">
       <small data-i="hangH">Short pauses shorter than this don't cut the transmission.</small></div>
+    </div>
+    <div id="boxSer" hidden>
+      <p class="help" data-i="hSer">In your application choose this serial port for PTT and squelch (COS). It keys the radio while the application raises the PTT line, and the application sees the squelch open on CTS and DCD while the radio receives.</p>
+      <div class="field"><span data-i="serDev">Serial port</span><code id="serPath">/dev/ttyKLINK0</code></div>
+      <div class="field"><span data-i="serPin">PTT line</span><select data-k="soundcard.serial_ptt_pin"><option value="rts">RTS</option><option value="dtr">DTR</option></select></div>
+      <div class="row" id="serLeds"><span class="a" id="lOpen" data-i="lOpen">in use</span><span class="a" id="lPtt">PTT</span><span class="a" id="lCos">COS</span></div>
+      <p class="help" id="serErr" hidden data-i="serErr">The serial port could not be created. Run once in a terminal: k-link setup-serial</p>
+    </div>
   </section>
 
   <section class="card">
@@ -167,7 +187,10 @@ const T = ES ? {
  copy:"Copiar",copied:"Copiado",sound:"Tarjeta de sonido (EchoLink/SvxLink, APRS, …)",
  hSound:"Crea los dispositivos «k-link: to radio» (altavoz) y «k-link: from radio» (micrófono). Elígelos en tu aplicación: lo que reproduzca se transmite (PTT por señal).",
  vox:"Umbral VOX",voxH:"La barra muestra en directo el audio de la aplicación (la raya marca los picos recientes). Transmite mientras está verde, pasado el mando naranja: reproduce tu audio habitual y coloca el mando justo por debajo de su nivel.",
- audio:"audio",vuIdle:"Ahora mismo ninguna aplicación reproduce en «k-link: to radio».",scName:"Tarjeta sonido",aIn:"→ radio",aOut:"← radio",lDown:"no funciona",hang:"Soltar PTT tras silencio",hangH:"Las pausas más cortas que esto no cortan la transmisión.",
+ audio:"audio",ctlVox:"PTT por señal (VOX)",ctlSer:"PTT por puerto serie",
+ hSer:"En tu aplicación elige este puerto serie para el PTT y el squelch (COS). La radio transmite mientras la aplicación activa la línea de PTT, y la aplicación ve el squelch abierto en CTS y DCD mientras la radio recibe.",
+ serDev:"Puerto serie",serPin:"Línea de PTT",lOpen:"en uso",
+ serErr:"No se pudo crear el puerto serie. Ejecuta una vez en un terminal: k-link setup-serial",vuIdle:"Ahora mismo ninguna aplicación reproduce en «k-link: to radio».",scName:"Tarjeta sonido",aIn:"→ radio",aOut:"← radio",lDown:"no funciona",hang:"Soltar PTT tras silencio",hangH:"Las pausas más cortas que esto no cortan la transmisión.",
  safety:"Seguridad del PTT",txTimeout:"Transmisión máxima (s)",netHang:"Soltar tras silencio de red (s)",
  save:"Guardar y aplicar",activity:"Actividad",idle:"En espera",tx:"Transmitiendo",rx:"Recibiendo",
  busy:"Ocupado",unpaired:"Sin adaptador",btOk:"Adaptador conectado",btBad:"Adaptador desconectado",
@@ -193,7 +216,7 @@ function status(s){
  if(!s.mac){bt.className="pill bad";bt.textContent=T.btNone}
  else if(s.link_up){bt.className="pill ok";bt.textContent=T.btOk}
  else{bt.className="pill bad";bt.textContent=T.btBad}
- links(s.links);
+ links(s.links);serial(s.links.find(l=>l.name==="soundcard"));
  meter("#mTx",s.level.tx);meter("#mRx",s.level.rx);
  vu(s.level.app??-99);
  $("#nTx").textContent=s.stats.tx;$("#nRx").textContent=s.stats.rx;
@@ -215,6 +238,13 @@ function links(ls){$("#lk").innerHTML="";
   li.querySelector("b").textContent=LN[l.name]||l.name;
   li.querySelector(".d").textContent=l.ok?l.detail:(T.lDown||"not running");
   $("#lk").appendChild(li);}}
+function serial(l){const s=l&&l.serial;$("#serLeds").hidden=!s;$("#serErr").hidden=!s||s.ok;
+ if(!s)return;$("#serPath").textContent=s.path;
+ $("#lOpen").classList.toggle("on",s.open);$("#lPtt").classList.toggle("on",s.ptt);
+ $("#lCos").classList.toggle("on",s.cos);}
+function ctl(){const v=document.querySelector("input[name=ctl]:checked")?.value||"vox";
+ $("#boxVox").hidden=v!=="vox";$("#boxSer").hidden=v!=="serial";}
+document.querySelectorAll("input[name=ctl]").forEach(e=>e.onchange=ctl);
 function addLog(e){const li=document.createElement("li");
  li.innerHTML=`<span class="t">${new Date(e.t*1000).toLocaleTimeString()}</span>`;
  const m=document.createElement("span");m.className=e.level;m.textContent=e.msg;li.appendChild(m);
@@ -255,10 +285,12 @@ $("#bCopy").onclick=()=>{navigator.clipboard?.writeText($("#aslSnip").textConten
 
 async function loadCfg(){cfg=await (await fetch("/api/config")).json();
  document.querySelectorAll("[data-k]").forEach(e=>{const [s,k]=e.dataset.k.split(".");
-  const v=cfg[s]?.[k];if(e.type==="checkbox")e.checked=!!v;else if(v!==undefined)e.value=v;});
- aslSnip();sliders();}
+  const v=cfg[s]?.[k];if(e.type==="checkbox")e.checked=!!v;
+  else if(e.type==="radio")e.checked=e.value===v;else if(v!==undefined)e.value=v;});
+ aslSnip();sliders();ctl();}
 $("#bSave").onclick=async()=>{const out={};
  document.querySelectorAll("[data-k]").forEach(e=>{const [s,k]=e.dataset.k.split(".");
+  if(e.type==="radio"&&!e.checked)return;
   (out[s]=out[s]||{})[k]=e.type==="checkbox"?e.checked:e.value;});
  const j=await post("/api/config",out);if(j.ok){$("#saved").textContent=T.restarting;
   setTimeout(()=>location.reload(),3000);}};

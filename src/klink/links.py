@@ -13,6 +13,7 @@ import struct
 import time
 
 from .audio import FRAME_BYTES, frame_dbfs
+from .serialport import VirtualSerial
 
 log = logging.getLogger("k-link")
 
@@ -92,6 +93,8 @@ class SoundcardLink:
       "k-link: to radio"   (speaker)    what apps play here is transmitted;
                                         PTT by signal (VOX) with pre-roll
       "k-link: from radio" (microphone) what the radio receives
+    PTT is by signal (VOX) or, with control = serial, by the RTS/DTR line
+    of the virtual serial port /dev/ttyKLINK0, whose CTS/DCD carry the COS.
     """
 
     name = "soundcard"
@@ -108,6 +111,16 @@ class SoundcardLink:
                                            fallback=0.3) / 0.02)))
         self.sink = self.source = self.nodes = None
         self.last_in = self.last_out = 0.0
+        self.serial = None
+        self.ptt_since = None            # serial PTT asserted at (monotonic)
+        if cfg.get("soundcard", "control", fallback="vox") == "serial":
+            self.serial = VirtualSerial(
+                cfg.get("soundcard", "serial_device", fallback="ttyKLINK0"),
+                cfg.get("soundcard", "serial_ptt_pin", fallback="rts"),
+                cfg.get("soundcard", "serial_cos_pins", fallback="cts,dcd"),
+                on_ptt=self._serial_ptt)
+            # unkeys come explicitly from the PTT line
+            self.tx_hang = 1.0
         self.tasks = []
 
     async def start(self):
@@ -170,13 +183,27 @@ class SoundcardLink:
             await asyncio.sleep(0.2)
         else:
             log.error("sound card: could not link 'from radio'")
-        self.tasks = [asyncio.get_running_loop().create_task(self._vox())]
+        if self.serial:
+            try:
+                await self.serial.start()
+            except OSError as e:
+                self.gw.event(f"serial port: cannot use /dev/cuse ({e}); "
+                              "run: k-link setup-serial", logging.ERROR)
+                self.serial.fd = None
+            loop_fn = self._serial_tx
+        else:
+            loop_fn = self._vox
+        self.tasks = [asyncio.get_running_loop().create_task(loop_fn())]
         log.info("sound card: 'k-link: to radio' / 'k-link: from radio' "
-                 "(VOX %.0f dBFS, hang %.1f s)", self.threshold, self.hang)
+                 "(%s)", f"PTT by {self.serial.path} "
+                 f"{self.serial.ptt_mask_name()}" if self.serial else
+                 f"VOX {self.threshold:.0f} dBFS, hang {self.hang:.1f} s")
 
     async def stop(self):
         for t in self.tasks:
             t.cancel()
+        if self.serial:
+            await self.serial.stop()
         for p in (self.sink, self.source, self.nodes):
             if p and p.returncode is None:
                 p.terminate()
@@ -221,12 +248,42 @@ class SoundcardLink:
             else:
                 self.gw.tx_frame(self, True, f)
 
+    # --- PTT by serial line
+    def _serial_ptt(self, on):
+        if on:
+            self.ptt_since = time.monotonic()
+        else:
+            self.ptt_since = None
+            self.gw.tx_frame(self, False, b"")
+
+    async def _serial_tx(self):
+        """App audio -> radio while the application holds PTT."""
+        # brief pulses (e.g. both lines raised when a port is opened)
+        # must not key the radio
+        debounce = 0.1
+        while True:
+            try:
+                f = await asyncio.wait_for(
+                    self.sink.stdout.readexactly(FRAME_BYTES), 0.1)
+            except asyncio.TimeoutError:
+                f = b""                  # keyed but nothing playing yet
+            except asyncio.IncompleteReadError:
+                log.error("sound card: 'to radio' stream ended")
+                return
+            self.gw.level["app"] = frame_dbfs(f) if f else -99.0
+            t = self.ptt_since
+            if t is not None and time.monotonic() - t >= debounce:
+                self.last_in = time.monotonic()
+                self.gw.tx_frame(self, True, f)
+
     def on_rx(self, frame):
         """Radio audio -> virtual microphone, never building up delay.
 
         pw-play plays silence while nothing arrives; if no application is
         recording, frames are dropped instead of queuing stale audio.
         """
+        if self.serial:
+            self.serial.set_cos(True)
         t = self.source.stdin.transport if self.source else None
         if t is None or t.is_closing():
             return
@@ -236,12 +293,20 @@ class SoundcardLink:
 
     def info(self):
         procs = (self.sink, self.source, self.nodes)
-        return {"ok": all(p and p.returncode is None for p in procs),
-                "detail": "k-link: to radio / k-link: from radio",
-                "last_in": self.last_in, "last_out": self.last_out}
+        ok = all(p and p.returncode is None for p in procs)
+        i = {"ok": ok, "detail": "k-link: to radio / k-link: from radio",
+             "last_in": self.last_in, "last_out": self.last_out}
+        if self.serial:
+            s = self.serial
+            i["serial"] = {"path": s.path, "ok": s.fd is not None,
+                           "open": s.opened > 0, "ptt": s.ptt,
+                           "cos": s.cos}
+            i["ok"] = ok and s.fd is not None
+        return i
 
     def on_rx_end(self):
-        pass
+        if self.serial:
+            self.serial.set_cos(False)
 
 
 LINKS = {"usrp": UsrpLink, "soundcard": SoundcardLink}

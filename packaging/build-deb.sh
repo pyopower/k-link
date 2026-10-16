@@ -17,6 +17,18 @@ main()
 SH
 chmod 755 "$ROOT/usr/bin/k-link"
 cp packaging/k-link.service "$ROOT/usr/lib/systemd/user/"
+mkdir -p "$ROOT/usr/lib/udev/rules.d"
+PYTHONPATH=src python3 -c 'from klink.cli import UDEV_RULES; print(UDEV_RULES, end="")' \
+    > "$ROOT/usr/lib/udev/rules.d/60-k-link.rules"
+cat > "$ROOT/DEBIAN/postinst" <<'SH'
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+    getent group klink >/dev/null || groupadd -r klink
+    udevadm control --reload 2>/dev/null || true
+fi
+SH
+chmod 755 "$ROOT/DEBIAN/postinst"
 cp README.md "$ROOT/usr/share/doc/k-link/"
 cat > "$ROOT/DEBIAN/control" <<CTL
 Package: k-link
@@ -34,7 +46,8 @@ Description: radio gateway through a Bluetooth K-plug PTT adapter
  similar) plugged into the radio's K connector: no cables or sound card.
  .
  After installing: k-link config && k-link pair && k-link test, then
- systemctl --user enable --now k-link
+ systemctl --user enable --now k-link. For PTT/COS by serial port
+ (/dev/ttyKLINK0), also run once: k-link setup-serial
 CTL
 mkdir -p dist
 dpkg-deb --root-owner-group --build "$ROOT" "dist/k-link_${VER}_all.deb"
