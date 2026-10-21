@@ -10,6 +10,21 @@ Image: `ghcr.io/pyopower/k-link-node` — `linux/amd64` and `linux/arm64`
 32-bit ARM image: AllStarLink 3 does not publish Asterisk for armhf. On a
 32-bit OS the container only prints that in its log.
 
+## System requirements
+
+| | Minimum |
+|---|---|
+| CPU | 64-bit: amd64 or arm64 (Raspberry Pi 3/4/5/Zero 2 W with a 64-bit OS) |
+| RAM | 1 GB recommended. The node uses about 230 MB; 512 MB (Zero 2 W) should work but is untested in Docker (a native install without Docker saves a little) |
+| Disk | 2 GB free (download ~300 MB, 812 MB unpacked, plus logs) |
+| OS | Linux with Docker and compose. Not Docker Desktop on Windows/macOS: the container cannot reach the host Bluetooth there |
+| Bluetooth | an adapter BlueZ supports with hands-free (SCO) audio; the Raspberry Pi built-in one works. Cheap USB dongles may not carry call audio (untested) |
+| Network | Internet; for a public node open `IAX_PORT`/udp (4569) and, for EchoLink, 5198-5199/udp and 5200/tcp in the router |
+
+Measured on a Raspberry Pi 5 with EchoLink on, idle: about 230 MB RAM
+(Asterisk 59 MB, Allmon3 55 MB, supervisord 29 MB, k-link 21 MB, panel
+17 MB) and 1-2 % CPU.
+
 ## Quick start
 
 ```sh
