@@ -75,7 +75,7 @@ in the panel:
 | privileged | `not privileged: set privileged: true` |
 | BlueZ on the host, adapter present and powered | `BlueZ is not running`, `no Bluetooth adapter`, `adapter ... is off` |
 | no other Bluetooth audio stack on the host | `another Bluetooth audio stack ... owns the hands-free profile` |
-| free ports (`WEB_PORT`, `KLINK_WEB_PORT`, `IAX_PORT`, `AMI_PORT`, USRP, Allmon3) | `port N/tcp|udp (...) is already in use` |
+| free ports (`WEB_PORT`, `KLINK_WEB_PORT`, `IAX_PORT`, `AMI_PORT`, USRP, Allmon3) | `port N/tcp (or udp) ... is already in use` |
 | one EchoLink node per host | `EchoLink ports ... are in use` |
 | 32-bit ARM | `32-bit ARM is not supported` |
 
