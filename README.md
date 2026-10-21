@@ -60,6 +60,17 @@ So no VOX or audio-level detection is needed: the adapter does it.
   bluez_monitor.properties["with-logind"] = false
   ```
 
+## Ready-made AllStarLink / EchoLink node (Docker)
+
+A complete node (AllStarLink 3 + EchoLink + Allmon3 + k-link + web panel)
+for amd64, arm64 and armv7, configured with the variables of a
+`docker-compose.yml`: see [docker/README.md](docker/README.md).
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/pyopower/k-link/main/docker/docker-compose.yml
+nano docker-compose.yml && docker compose up -d
+```
+
 ## Install
 
 Debian / Raspberry Pi OS / Ubuntu (pulls in BlueZ and PipeWire):

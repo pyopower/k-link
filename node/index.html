@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nodo k-link</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d232b;--mut:#5f6b7a;--line:#dde2e8;--acc:#1f6feb;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--fg:#e6e9ee;--mut:#9aa5b3;--line:#2a313b;--acc:#4c8dff;--ok:#3fb950;--bad:#ff6b6b;--warn:#d29922}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;flex:1}
+header a{color:var(--acc);text-decoration:none;font-size:14px}
+main{max-width:860px;margin:0 auto;padding:16px;display:grid;gap:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+h2{font-size:15px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k{color:var(--mut);font-size:12px}
+.v{font-weight:600;overflow-wrap:anywhere}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;font-size:12px;overflow:auto;max-height:200px;margin:8px 0 0}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.row>*{flex:1;min-width:120px}
+button{padding:9px 14px;border:0;border-radius:6px;background:var(--acc);color:#fff;font-size:14px;cursor:pointer}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--line)}
+button.danger{background:var(--bad)}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:12px 0 0;padding:4px 12px 12px}
+legend{color:var(--mut);font-size:13px;padding:0 4px}
+#msg{min-height:20px}
+.banner{background:var(--warn);color:#fff;padding:10px 16px;font-size:14px}
+.hint{color:var(--mut);font-size:12px;margin-top:4px}
+</style>
+</head>
+<body>
+<div id="pwwarn" class="banner" hidden>La contraseña es la de fábrica (<b>k-link</b>). Cámbiala en Ajustes.</div>
+<header>
+  <h1>Nodo k-link <span id="hn" class="k"></span></h1>
+  <a id="klinkurl" href="#" target="_blank">Radio (k-link) ↗</a>
+  <a href="/allmon3/" target="_blank">Allmon3 ↗</a>
+</header>
+<main>
+<section>
+  <h2>Estado</h2>
+  <div class="grid" id="st"></div>
+  <pre id="links"></pre>
+</section>
+
+<section>
+  <h2>Enlaces</h2>
+  <div class="row">
+    <div><label for="ln">Nodo (ASL, o EchoLink: 3 + 6 cifras)</label><input id="ln" inputmode="numeric" placeholder="60596"></div>
+    <div><label for="lm">Modo</label><select id="lm"><option value="tx">Hablar y escuchar</option><option value="mon">Solo escuchar</option><option value="off">Desconectar este</option></select></div>
+    <div style="flex:0"><button onclick="link()">Aplicar</button></div>
+  </div>
+  <div class="row" style="margin-top:10px"><div><button class="sec" onclick="post('/api/unlinkall').then(refresh)">Desconectar todo</button></div></div>
+  <p id="msg"></p>
+</section>
+
+<section>
+  <h2>Ajustes</h2>
+  <p id="dockernote" class="hint" hidden>Docker: estos ajustes salen de <b>docker-compose.yml</b>. Cámbialos allí y ejecuta <code>docker compose up -d</code>.</p>
+  <form id="cf" onsubmit="saveCfg(event)">
+    <fieldset><legend>Acceso</legend>
+      <label>Contraseña de administración (web, k-link y usuario ssh)</label>
+      <input name="ADMIN_PASSWORD" type="password" autocomplete="new-password">
+      <label>Indicativo (ID en morse)</label><input name="CALLSIGN" placeholder="EA3XXX">
+    </fieldset>
+    <fieldset><legend>AllStarLink</legend>
+      <div class="row">
+        <div><label>Nº de nodo</label><input name="NODE" inputmode="numeric" placeholder="vacío = privado 1999"></div>
+        <div><label>Contraseña del nodo</label><input name="NODE_PASSWORD" type="password" autocomplete="new-password"></div>
+      </div>
+      <label>Enlazar al arrancar</label><input name="AUTOLINK" inputmode="numeric" placeholder="nodo, o 3 + nº EchoLink">
+    </fieldset>
+    <fieldset><legend>EchoLink</legend>
+      <label>Activado</label><select name="ECHOLINK"><option value="no">No</option><option value="yes">Sí</option></select>
+      <div class="row">
+        <div><label>Indicativo EchoLink</label><input name="EL_CALL" placeholder="EA3XXX-L"></div>
+        <div><label>Contraseña</label><input name="EL_PASSWORD" type="password" autocomplete="new-password"></div>
+        <div><label>Nº de nodo EchoLink</label><input name="EL_NODE" inputmode="numeric"></div>
+      </div>
+      <div class="row">
+        <div><label>Nombre</label><input name="EL_NAME"></div>
+        <div><label>Localidad</label><input name="EL_QTH"></div>
+        <div><label>Email</label><input name="EL_EMAIL" type="email"></div>
+      </div>
+    </fieldset>
+    <fieldset id="wififs"><legend>Wifi</legend>
+      <div class="row">
+        <div><label>País</label><input name="WIFI_COUNTRY" maxlength="2"></div>
+        <div><label>Red propia (punto de acceso)</label><input name="AP_SSID"></div>
+        <div><label>Clave del punto de acceso</label><input name="AP_PASSWORD" type="password" autocomplete="new-password"></div>
+      </div>
+    </fieldset>
+    <p class="hint">Las contraseñas vacías se mantienen. Guardar reinicia Asterisk y k-link (corta los enlaces unos segundos).</p>
+    <button id="savebtn">Guardar y aplicar</button>
+  </form>
+</section>
+
+<section id="wifisec">
+  <h2>Redes wifi</h2>
+  <div class="row">
+    <div><label for="ws">Red</label><input id="ws" list="wl" placeholder="nombre de la red"><datalist id="wl"></datalist></div>
+    <div><label for="wp">Clave</label><input id="wp" type="password"></div>
+    <div style="flex:0"><button onclick="addWifi()">Añadir y conectar</button></div>
+  </div>
+  <div class="row" style="margin-top:10px"><div><button class="sec" onclick="scan()">Buscar redes</button></div></div>
+  <p class="hint">En modo punto de acceso, al conectar a la red de casa esta página se pierde: vuelve a entrar por http://<span class="hnm"></span>.local/</p>
+</section>
+
+<section id="syssec">
+  <h2>Sistema</h2>
+  <div class="row">
+    <div><button class="sec" onclick="confirm('¿Reiniciar?')&&post('/api/reboot')">Reiniciar</button></div>
+    <div><button class="danger" onclick="confirm('¿Apagar? Habrá que desenchufar y enchufar para encender.')&&post('/api/poweroff')">Apagar</button></div>
+  </div>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function msg(t,cls){$("#msg").className=cls||"";$("#msg").textContent=t;$("#msg").scrollIntoView({block:"nearest"})}
+async function post(u,b){const r=await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(!r.ok){msg([].concat(j.error||r.status).join(" · "),"bad");throw j}return j}
+function dur(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+"d ":"")+h+"h "+m+"m"}
+function item(k,v,cls){return `<div><div class="k">${k}</div><div class="v ${cls||""}">${v}</div></div>`}
+async function refresh(){
+  let s;try{s=await (await fetch("/api/status")).json()}catch(e){return}
+  $("#hn").textContent=s.hostname;document.querySelectorAll(".hnm").forEach(e=>e.textContent=s.hostname);
+  $("#klinkurl").href=`http://${location.hostname}:${s.klink_port||8077}/`;
+  if(s.docker&&!window._dk){window._dk=1;["#wifisec","#syssec","#wififs","#savebtn"].forEach(q=>$(q).hidden=true);$("#dockernote").hidden=false;for(const el of $("#cf").elements)el.disabled=true;}
+  $("#pwwarn").hidden=!s.default_password;
+  const reg=s.private?"privado (sin registro)":(/Registered/i.test(s.registration||"")?"registrado":"sin registrar");
+  $("#st").innerHTML=
+    item("Nodo",esc(s.node))+
+    item("AllStarLink",s.asterisk?esc(reg):"Asterisk parado",s.asterisk&&(s.private||reg=="registrado")?"ok":"bad")+
+    item("Radio (k-link)",s.klink?"en marcha":"parado",s.klink?"ok":"bad")+
+    item("EchoLink",s.echolink?"activo":"desactivado")+
+    item("Wifi",s.ap?"punto de acceso":s.wifi?esc(s.wifi[0])+" ("+esc(s.wifi[1])+"%)":"—",s.ap?"warn":"")+
+    item("IP",esc((s.ips||[]).join(" ")))+
+    item("Temperatura",s.temp!=null?s.temp+" °C":"—",s.temp>75?"bad":"")+
+    item("Memoria",Math.round(s.mem[0]/1024)+" / "+Math.round(s.mem[1]/1024)+" MB")+
+    item("Encendido",dur(s.uptime));
+  $("#links").textContent=(s.nodes||"")+(s.links?"\n"+s.links:"")||"—";
+  if(s.job&&s.job.msg)msg(s.job.msg,s.job.busy?"warn":"");
+}
+async function loadCfg(){
+  const c=await (await fetch("/api/config")).json();
+  for(const el of $("#cf").elements){if(!el.name)continue;el.value=c[el.name]??"";
+    if(el.type=="password")el.placeholder=(c._set||[]).includes(el.name)?"(guardada)":"";}
+}
+async function saveCfg(e){e.preventDefault();const b={};for(const el of $("#cf").elements)if(el.name)b[el.name]=el.value;
+  await post("/api/config",b);msg("Aplicando ajustes…","warn");
+  if(b.ADMIN_PASSWORD)msg("Aplicando… el navegador pedirá la contraseña nueva.","warn");}
+async function link(){const n=$("#ln").value.trim();if(!n)return;const r=await post("/api/link",{node:n,mode:$("#lm").value});msg(r.out||"Orden enviada");setTimeout(refresh,1500)}
+async function scan(){msg("Buscando…");const l=await (await fetch("/api/scan")).json();$("#wl").innerHTML=l.map(([s,q])=>`<option value="${esc(s)}">${q}%</option>`).join("");msg(l.length+" redes. Elige en el campo Red.")}
+async function addWifi(){await post("/api/wifi",{ssid:$("#ws").value,password:$("#wp").value});msg("Guardada. Conectando…","warn")}
+refresh();loadCfg();setInterval(refresh,5000);
+</script>
+</body>
+</html>

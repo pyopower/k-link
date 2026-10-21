@@ -1,0 +1,73 @@
+#!/usr/bin/python3
+"""Container start: turn the docker-compose.yml variables into ASL, EchoLink,
+Allmon3 and k-link configuration, check the host, then run everything under
+supervisord."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/k-link-node")
+import nodecfg  # noqa: E402
+
+
+def log(msg):
+    print(f"[k-link-node] {msg}", flush=True)
+
+
+cfg = nodecfg.from_env()
+problems = nodecfg.validate(cfg)
+if problems:
+    for p in problems:
+        log(f"ERROR {p}")
+    sys.exit("fix docker-compose.yml and start again")
+
+# --- host checks: k-link drives the HOST's BlueZ through its system D-Bus
+bus = Path("/run/dbus/system_bus_socket")
+if not bus.exists():
+    log("ERROR no /run/dbus/system_bus_socket: mount it from the host "
+        "(volumes: - /run/dbus:/run/dbus)")
+    sys.exit(1)
+if subprocess.run(["busctl", "--system", "status", "org.bluez"],
+                  capture_output=True).returncode:
+    log("WARNING BlueZ is not running on the host (sudo systemctl enable "
+        "--now bluetooth); k-link will wait for it")
+if not Path("/sys/class/bluetooth").exists() or \
+        not any(Path("/sys/class/bluetooth").glob("hci*")):
+    log("WARNING no Bluetooth adapter seen (needs network_mode: host and a "
+        "working adapter on the host)")
+
+# --- runtime dirs
+run = Path(os.environ.get("XDG_RUNTIME_DIR", "/run/k-link"))
+run.mkdir(parents=True, exist_ok=True)
+run.chmod(0o700)
+Path("/data").mkdir(exist_ok=True)
+for d in ("/run/asterisk", "/var/log/asterisk", "/var/spool/asterisk"):
+    Path(d).mkdir(parents=True, exist_ok=True)
+    subprocess.run(["chown", "-R", "asterisk:asterisk", d])
+Path("/run/apache2").mkdir(exist_ok=True)
+
+# --- configuration (regenerated at every start, like the usual ASL images)
+nodecfg.apply_all(cfg, restart=False)
+nodecfg.apply_entityid()
+
+web_port, panel_port = cfg["WEB_PORT"], cfg["PANEL_PORT"]
+Path("/etc/apache2/ports.conf").write_text(f"Listen {web_port}\n")
+site = Path("/etc/apache2/sites-available/k-link-node.conf")
+t = site.read_text()
+t = t.replace("<VirtualHost *:80>", f"<VirtualHost *:{web_port}>")
+t = t.replace("127.0.0.1:8078", f"127.0.0.1:{panel_port}")
+site.write_text(t)
+
+node = nodecfg.node_number(cfg)
+log(f"node {node}{' (private)' if node == nodecfg.PRIVATE_NODE else ''}, "
+    f"EchoLink {'on' if cfg['ECHOLINK'] == 'yes' else 'off'}, "
+    f"autolink {cfg['AUTOLINK'] or '-'}")
+log(f"panel   http://<host>:{web_port}/   (any user, ADMIN_PASSWORD)")
+log(f"k-link  http://<host>:{cfg['KLINK_WEB_PORT']}/  (pair the adapter here)")
+log(f"allmon3 http://<host>:{web_port}/allmon3/  (user admin)")
+if cfg["ADMIN_PASSWORD"] == "k-link":
+    log("WARNING ADMIN_PASSWORD is the default one: change it")
+
+os.execvp("supervisord", ["supervisord", "-n", "-c",
+                          "/etc/supervisor/supervisord.conf"])

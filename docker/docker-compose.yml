@@ -1,0 +1,50 @@
+# k-link node: AllStarLink / EchoLink node whose radio is linked through the
+# Bluetooth adapter plugged into its K connector (Abbree kit and similar).
+# Multi-architecture image: amd64, arm64 (Raspberry Pi 3/4/5/Zero 2 W 64-bit)
+# and armv7 (32-bit Raspberry Pi OS).
+#
+# Host needs: Docker, BlueZ running (sudo systemctl enable --now bluetooth)
+# and NO other PipeWire/PulseAudio using Bluetooth audio (on a desktop,
+# disable Bluetooth in its WirePlumber, see docker/README.md).
+#
+#   docker compose up -d        then open http://<host>:8080/
+services:
+  k-link-node:
+    image: ghcr.io/pyopower/k-link-node:latest
+    container_name: k-link-node
+    environment:
+      # --- access: web panel, k-link web, Allmon3 (user admin) ---
+      - ADMIN_PASSWORD=k-link
+      # --- station callsign (CW ID every 9 minutes) ---
+      - CALLSIGN=
+      # --- AllStarLink node (empty = private node 1999, no registration) ---
+      - ASLNODE=
+      - ASLPASS=
+      # --- EchoLink (empty = off). Validated account at echolink.org ---
+      - ECHOLINKCALLSIGN=
+      - ECHOLINKNODE=
+      - ECHOLINKPASS=
+      - ECHOLINKNAME=
+      - ECHOLINKQTH=
+      - ECHOLINKEMAIL=
+      # --- auto connect at start, comma separated. Sample: AC_ASL=2000,2001 ---
+      - AC_ASL=
+      - AC_ECHOLINK=
+      # --- Bluetooth adapter MAC (optional: or pair it from the k-link web) ---
+      - BT_MAC=
+      # --- ports (host network: change them if already in use) ---
+      - WEB_PORT=8080          # panel + Allmon3
+      - KLINK_WEB_PORT=8077    # k-link web: pairing, levels, echo test
+      - IAX_PORT=4569          # AllStarLink IAX2 (udp); open it in your router
+      # EchoLink always uses 5198-5199/udp and 5200/tcp (open them in the router)
+      # --- Allmon3 title (optional) ---
+      - DASH_TITLE=
+      - TZ=Europe/Madrid
+    # host network and privileged are required: Bluetooth sockets only exist
+    # in the host network namespace, and k-link sets the adapter class
+    network_mode: host
+    privileged: true
+    volumes:
+      - /run/dbus:/run/dbus           # host BlueZ (system D-Bus)
+      - ./data:/data                  # k-link.ini (paired adapter) + secrets
+    restart: unless-stopped
