@@ -5,8 +5,9 @@ web panel. The radio (e.g. an MD-380 on analog FM) is linked with no cables,
 through the Bluetooth adapter of a wireless speaker-mic kit plugged into its
 K connector. Everything is set with variables in `docker-compose.yml`.
 
-Image: `ghcr.io/pyopower/k-link-node` — `linux/amd64`, `linux/arm64`
-(Raspberry Pi 3/4/5/Zero 2 W with a 64-bit OS), `linux/arm/v7` (32-bit).
+Image: `ghcr.io/pyopower/k-link-node` — `linux/amd64` and `linux/arm64`
+(Raspberry Pi 3/4/5/Zero 2 W with a **64-bit** OS). There is no 32-bit ARM
+image: AllStarLink 3 does not publish Asterisk for armhf.
 
 ## Quick start
 
@@ -63,7 +64,7 @@ Open `IAX_PORT`/udp in the router for AllStarLink, and 5198-5199/udp +
 
 ```sh
 docker buildx build -f docker/Dockerfile \
-  --platform linux/amd64,linux/arm64,linux/arm/v7 -t k-link-node .
+  --platform linux/amd64,linux/arm64 -t k-link-node .
 ```
 
 The GitHub workflow `.github/workflows/docker.yml` publishes it to

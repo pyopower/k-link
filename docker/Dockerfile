@@ -1,6 +1,6 @@
 # k-link node: AllStarLink 3 + EchoLink + Allmon3 + k-link in one container.
-# Multi-arch (linux/amd64, linux/arm64, linux/arm/v7). Build from the repo root:
-#   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64,linux/arm/v7 .
+# Multi-arch (linux/amd64, linux/arm64; ASL3 has no 32-bit Asterisk). From the repo root:
+#   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 .
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive

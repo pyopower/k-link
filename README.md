@@ -63,7 +63,7 @@ So no VOX or audio-level detection is needed: the adapter does it.
 ## Ready-made AllStarLink / EchoLink node (Docker)
 
 A complete node (AllStarLink 3 + EchoLink + Allmon3 + k-link + web panel)
-for amd64, arm64 and armv7, configured with the variables of a
+for amd64 and arm64, configured with the variables of a
 `docker-compose.yml`: see [docker/README.md](docker/README.md).
 
 ```sh

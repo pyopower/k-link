@@ -1,6 +1,6 @@
 name: docker
 
-# Multi-arch image ghcr.io/<owner>/k-link-node (amd64, arm64, arm/v7)
+# Multi-arch image ghcr.io/<owner>/k-link-node (amd64, arm64)
 on:
   push:
     branches: [main]
@@ -37,7 +37,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

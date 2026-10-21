@@ -1,7 +1,7 @@
 # k-link node: AllStarLink / EchoLink node whose radio is linked through the
 # Bluetooth adapter plugged into its K connector (Abbree kit and similar).
-# Multi-architecture image: amd64, arm64 (Raspberry Pi 3/4/5/Zero 2 W 64-bit)
-# and armv7 (32-bit Raspberry Pi OS).
+# Multi-architecture image: amd64 and arm64 (Raspberry Pi 3/4/5/Zero 2 W with a
+# 64-bit OS). No 32-bit ARM: AllStarLink 3 does not build Asterisk for it.
 #
 # Host needs: Docker, BlueZ running (sudo systemctl enable --now bluetooth)
 # and NO other PipeWire/PulseAudio using Bluetooth audio (on a desktop,
