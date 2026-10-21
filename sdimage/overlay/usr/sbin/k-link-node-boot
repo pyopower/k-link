@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+"""Runs as root at every boot, before Asterisk: prepares the radio user for
+k-link and applies /boot/firmware/k-link-node.txt if present (then deletes it,
+it holds passwords)."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/k-link-node")
+import nodecfg  # noqa: E402
+
+u = nodecfg.radio_user()
+home = Path(u.pw_dir)
+
+# k-link: user service started at boot (linger), may set the BT device class
+# and create its virtual serial port
+subprocess.run(["usermod", "-aG", "klink,dialout,bluetooth,audio", u.pw_name])
+Path("/var/lib/systemd/linger").mkdir(parents=True, exist_ok=True)
+Path(f"/var/lib/systemd/linger/{u.pw_name}").touch()
+Path("/etc/sudoers.d/k-link-node").write_text(
+    f"{u.pw_name} ALL=(root) NOPASSWD: /usr/bin/btmgmt\n")
+Path("/etc/sudoers.d/k-link-node").chmod(0o440)
+wants = home / ".config/systemd/user/default.target.wants"
+wants.mkdir(parents=True, exist_ok=True)
+link = wants / "k-link.service"
+if not link.is_symlink():
+    link.symlink_to("/usr/lib/systemd/user/k-link.service")
+for p in [home / ".config", home / ".config/systemd",
+          home / ".config/systemd/user", wants]:
+    subprocess.run(["chown", "-h", f"{u.pw_uid}:{u.pw_gid}", str(p)])
+subprocess.run(["chown", "-h", f"{u.pw_uid}:{u.pw_gid}", str(link)])
+
+first = not nodecfg.CONF.exists()
+cfg = nodecfg.load()
+# the Asterisk manager secret is created per device (not in the image)
+changed = first or not nodecfg.SECRET.exists()
+if nodecfg.BOOT_FILE.exists():
+    new = nodecfg.parse(nodecfg.BOOT_FILE.read_text())
+    if new.get("WIFI_SSID"):
+        nodecfg.apply_wifi_country({**cfg, **new})
+        ok, msg = nodecfg.add_wifi(new["WIFI_SSID"], new.get("WIFI_PASSWORD", ""))
+        print(f"wifi {new['WIFI_SSID']}: {'ok' if ok else msg}")
+    for k, v in new.items():
+        if k in nodecfg.DEFAULTS and v:
+            cfg[k] = v
+            changed = True
+    nodecfg.BOOT_FILE.unlink()
+    subprocess.run(["sync"])
+
+if changed:
+    problems = nodecfg.validate(cfg)
+    if problems:
+        print("k-link-node.txt:", "; ".join(problems))
+    nodecfg.save(cfg)
+    # files of the k-link user (pipx-less .deb: k-link config writes them)
+    nodecfg.apply_all(cfg, restart=False)
+    subprocess.run(["chown", "-R", f"{u.pw_uid}:{u.pw_gid}",
+                    str(home / ".config")])
+if not os.environ.get("KLN_BUILD"):
+    nodecfg.apply_entityid()
+print("k-link node ready: node", nodecfg.node_number(cfg))

@@ -71,6 +71,13 @@ curl -fsSLO https://raw.githubusercontent.com/pyopower/k-link/main/docker/docker
 nano docker-compose.yml && docker compose up -d
 ```
 
+## Ready-made SD card image (Raspberry Pi Zero 2 W)
+
+The same node as an image to flash: boot it, open `http://k-link-node.local/`
+and pair the adapter. Download it from the
+[releases](https://github.com/pyopower/k-link/releases); see
+[sdimage/README.md](sdimage/README.md).
+
 ## Install
 
 Debian / Raspberry Pi OS / Ubuntu (pulls in BlueZ and PipeWire):
@@ -235,7 +242,7 @@ plays the role of ASL: sends a WAV and records what comes back.
 
 ```ini
 [bluetooth]
-mac = 56:A0:12:F3:58:71
+mac = AA:BB:CC:DD:EE:FF
 
 [usrp]
 listen_host = 0.0.0.0

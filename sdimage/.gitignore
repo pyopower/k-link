@@ -1,0 +1,7 @@
+base/
+dist/
+root/
+work.img
+asl-repo.deb
+resolv.conf.orig
+*.log

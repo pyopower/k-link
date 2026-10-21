@@ -1,0 +1,51 @@
+#!/bin/sh
+# Setup hotspot when no known wifi network is reachable.
+#   k-link-node-wifi        at boot: wait for a connection, else start the AP
+#   k-link-node-wifi try    stop the AP, try the stored networks, AP again if none
+#   k-link-node-wifi ap     start the AP now
+CONF=/etc/k-link-node/node.conf
+get() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null | head -1; }
+SSID=$(get AP_SSID); SSID=${SSID:-K-LINK-SETUP}
+PASS=$(get AP_PASSWORD); PASS=${PASS:-k-link-setup}
+
+connected() {
+    nmcli -t -f DEVICE,TYPE,STATE dev 2>/dev/null |
+        grep -q '^wlan0:wifi:connected$' &&
+    ! nmcli -t -f NAME con show --active | grep -qx k-link-ap
+}
+wired() { nmcli -t -f TYPE,STATE dev | grep -qE '^(ethernet|gadget):connected$'; }
+
+start_ap() {
+    rfkill unblock wifi 2>/dev/null
+    nmcli con delete k-link-ap >/dev/null 2>&1
+    nmcli con add type wifi ifname wlan0 con-name k-link-ap ssid "$SSID" \
+        connection.autoconnect no 802-11-wireless.mode ap \
+        802-11-wireless.band bg ipv4.method shared \
+        ipv4.addresses 10.42.0.1/24 \
+        wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASS" >/dev/null &&
+    nmcli con up k-link-ap >/dev/null && echo "AP $SSID up: http://10.42.0.1/"
+}
+
+wait_conn() {   # $1 seconds
+    i=0
+    while [ $i -lt "$1" ]; do connected && return 0; sleep 3; i=$((i + 3)); done
+    return 1
+}
+
+case "$1" in
+ap) start_ap ;;
+try)
+    nmcli con down k-link-ap >/dev/null 2>&1
+    nmcli dev wifi rescan >/dev/null 2>&1
+    nmcli -t -f NAME,TYPE con show | sed -n 's/:802-11-wireless$//p' |
+        grep -vx k-link-ap | while IFS= read -r c; do
+            nmcli con up "$c" >/dev/null 2>&1 && break
+        done
+    wait_conn 30 && { echo connected; exit 0; }
+    start_ap; exit 1 ;;
+*)
+    rfkill unblock wifi 2>/dev/null
+    wait_conn 60 && { echo "wifi connected"; exit 0; }
+    wired && { echo "wired network, no AP"; exit 0; }
+    start_ap ;;
+esac

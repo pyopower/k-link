@@ -1,0 +1,12 @@
+[Unit]
+Description=k-link node: setup hotspot when no known wifi
+After=NetworkManager.service k-link-node-boot.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/k-link-node-wifi
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

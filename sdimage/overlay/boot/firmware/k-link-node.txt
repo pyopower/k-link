@@ -1,0 +1,43 @@
+# k-link node: ajustes de primer arranque / first-boot settings
+#
+# Puedes editar este fichero desde el PC antes de arrancar la Zero.
+# Al arrancar se aplica y se BORRA (lleva contraseñas). Después todo se
+# cambia desde la web: http://k-link-node.local/
+# Edit on your PC before first boot. It is applied and DELETED at boot;
+# afterwards use the web panel.
+#
+# Lo que dejes vacío conserva el valor actual. Empty = keep current value.
+
+# Contraseña de la web, de k-link y del usuario "radio" (ssh).
+# Web, k-link and "radio" user (ssh) password. Default: k-link
+ADMIN_PASSWORD=
+
+# Wifi de casa (también se puede poner desde la web en modo punto de acceso)
+WIFI_SSID=
+WIFI_PASSWORD=
+WIFI_COUNTRY=ES
+
+# Indicativo (ID en morse cada 9 min) / callsign for the CW ID
+CALLSIGN=
+
+# Nodo AllStarLink: vacío = nodo privado 1999 (sin registro)
+# AllStarLink node number and its password from allstarlink.org
+NODE=
+NODE_PASSWORD=
+
+# Nodo al que enlazar al arrancar (ASL, o EchoLink como 3 + 6 cifras)
+# Node to link at startup (EchoLink: 3 followed by its 6 digits)
+AUTOLINK=
+
+# EchoLink (yes/no) con la cuenta validada en echolink.org
+ECHOLINK=no
+EL_CALL=
+EL_PASSWORD=
+EL_NODE=
+EL_NAME=
+EL_QTH=
+EL_EMAIL=
+
+# Wifi propia cuando no hay red conocida / setup hotspot
+AP_SSID=K-LINK-SETUP
+AP_PASSWORD=k-link-setup

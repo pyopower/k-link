@@ -1,0 +1,13 @@
+[Unit]
+Description=k-link node: prepare user and apply boot settings
+After=local-fs.target NetworkManager.service
+Wants=NetworkManager.service
+Before=asterisk.service allmon3.service systemd-logind.service user@1000.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/k-link-node-boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -37,7 +37,7 @@ cat > "$ROOT/DEBIAN/control" <<CTL
 Package: k-link
 Version: $VER
 Architecture: all
-Maintainer: C31AG <adan@tecnofutura.net>
+Maintainer: pyopower <pyopower@users.noreply.github.com>
 Depends: python3 (>= 3.9), bluez, pipewire, pipewire-bin, wireplumber, libspa-0.2-bluetooth
 Recommends: sox, pipewire-pulse, pipewire-alsa
 Section: hamradio

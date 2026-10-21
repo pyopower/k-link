@@ -1,0 +1,11 @@
+[Unit]
+Description=k-link node web panel
+After=network.target k-link-node-boot.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/lib/k-link-node/web.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
