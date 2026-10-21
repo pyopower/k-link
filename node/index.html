@@ -31,10 +31,13 @@ fieldset{border:1px solid var(--line);border-radius:8px;margin:12px 0 0;padding:
 legend{color:var(--mut);font-size:13px;padding:0 4px}
 #msg{min-height:20px}
 .banner{background:var(--warn);color:#fff;padding:10px 16px;font-size:14px}
+.banner.err{background:var(--bad)}
+.banner code{background:rgba(0,0,0,.2);padding:0 4px;border-radius:4px}
 .hint{color:var(--mut);font-size:12px;margin-top:4px}
 </style>
 </head>
 <body>
+<div id="checks"></div>
 <div id="pwwarn" class="banner" hidden>La contraseña es la de fábrica (<b>k-link</b>). Cámbiala en Ajustes.</div>
 <header>
   <h1>Nodo k-link <span id="hn" class="k"></span></h1>
@@ -132,6 +135,7 @@ async function refresh(){
   $("#klinkurl").href=`http://${location.hostname}:${s.klink_port||8077}/`;
   if(s.docker&&!window._dk){window._dk=1;["#wifisec","#syssec","#wififs","#savebtn"].forEach(q=>$(q).hidden=true);$("#dockernote").hidden=false;for(const el of $("#cf").elements)el.disabled=true;}
   $("#pwwarn").hidden=!s.default_password;
+  $("#checks").innerHTML=(s.checks||[]).map(c=>`<div class="banner ${c.level=="ERROR"?"err":""}">${c.es}</div>`).join("");
   const reg=s.private?"privado (sin registro)":(/Registered/i.test(s.registration||"")?"registrado":"sin registrar");
   $("#st").innerHTML=
     item("Nodo",esc(s.node))+

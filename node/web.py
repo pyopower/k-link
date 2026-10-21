@@ -53,6 +53,11 @@ def status():
           "default_password": cfg["ADMIN_PASSWORD"] == "k-link",
           "job": job, "docker": nodecfg.DOCKER,
           "klink_port": cfg.get("KLINK_WEB_PORT", "8077")}
+    try:    # problems found by the container's start checks
+        st["checks"] = json.loads(Path("/run/k-link-node/checks.json")
+                                  .read_text())
+    except (OSError, ValueError):
+        st["checks"] = []
     st["ips"] = sh(["hostname", "-I"]).split()
     wl = sh(["nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL", "dev", "wifi"])
     st["wifi"] = next((ln.split(":")[1:] for ln in wl.splitlines()

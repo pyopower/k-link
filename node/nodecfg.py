@@ -32,7 +32,8 @@ DEFAULTS = {
 # only through environment variables (Docker)
 EXTRA = {"IAX_PORT": "4569", "WEB_PORT": "80", "KLINK_WEB_PORT": "8077",
          "PANEL_PORT": "8078", "USRP_KLINK_PORT": "34001",
-         "USRP_ASL_PORT": "32001", "BT_MAC": "", "DASH_TITLE": ""}
+         "USRP_ASL_PORT": "32001", "AMI_PORT": "5038", "BT_MAC": "",
+         "DASH_TITLE": ""}
 
 # docker-compose variable -> setting (names close to the usual ASL composes)
 ENV_MAP = {
@@ -111,7 +112,7 @@ def validate(cfg):
     """Return a list of problems (in Spanish, shown in the web panel)."""
     err = []
     for k in ("NODE", "EL_NODE", "IAX_PORT", "WEB_PORT", "KLINK_WEB_PORT",
-              "PANEL_PORT", "USRP_KLINK_PORT", "USRP_ASL_PORT"):
+              "PANEL_PORT", "USRP_KLINK_PORT", "USRP_ASL_PORT", "AMI_PORT"):
         if cfg.get(k) and not cfg[k].isdigit():
             err.append(f"{k}: solo cifras")
     if any(not n.isdigit() for n in autolinks(cfg)):
@@ -228,14 +229,16 @@ def apply_asterisk(cfg):
 
     secret = manager_secret()
     p = AST / "manager.conf"
+    ami = cfg.get("AMI_PORT", "5038")
     t = re.sub(r"(\[admin\]\s*\nsecret\s*=\s*).*", rf"\g<1>{secret}",
                p.read_text(), count=1)
+    t = re.sub(r"^port\s*=\s*\d+", f"port = {ami}", t, count=1, flags=re.M)
     _write(p, t)
 
     p = Path("/etc/allmon3/allmon3.ini")
     t = p.read_text().split("; --- k-link node ---")[0].rstrip() + "\n"
     t += (f"\n; --- k-link node ---\n[{node}]\nhost=127.0.0.1\n"
-          f"user=admin\npass={secret}\n")
+          f"port={ami}\nuser=admin\npass={secret}\n")
     _write(p, t)
 
     p = Path("/etc/allmon3/web.ini")

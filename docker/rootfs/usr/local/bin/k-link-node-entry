@@ -2,7 +2,9 @@
 """Container start: turn the docker-compose.yml variables into ASL, EchoLink,
 Allmon3 and k-link configuration, check the host, then run everything under
 supervisord."""
+import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -22,20 +24,141 @@ if problems:
         log(f"ERROR {p}")
     sys.exit("fix docker-compose.yml and start again")
 
-# --- host checks: k-link drives the HOST's BlueZ through its system D-Bus
+# --- host checks. Each problem goes to the log and to the web panel
+# (/run/k-link-node/checks.json); only a missing system D-Bus stops the start.
+checks = []
+
+
+def report(level, en, es):
+    log(f"{level} {en}")
+    checks.append({"level": level, "en": en, "es": es})
+
+
+def bt_socket():
+    """SCO (the voice channel) only exists in the host network namespace."""
+    try:
+        socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET,
+                      socket.BTPROTO_SCO).close()
+        return True
+    except (OSError, AttributeError):
+        return False
+
+
+def capability(bit):
+    for ln in Path("/proc/self/status").read_text().splitlines():
+        if ln.startswith("CapEff:"):
+            return bool(int(ln.split()[1], 16) >> bit & 1)
+    return False
+
+
+def busctl(*args):
+    return subprocess.run(["busctl", "--system", *args],
+                          capture_output=True, text=True, timeout=10)
+
+
+def port_busy(port, udp=False, host="0.0.0.0"):
+    s = socket.socket(socket.AF_INET,
+                      socket.SOCK_DGRAM if udp else socket.SOCK_STREAM)
+    try:
+        if not udp:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, int(port)))
+        return False
+    except OSError:
+        return True
+    finally:
+        s.close()
+
+
 bus = Path("/run/dbus/system_bus_socket")
 if not bus.exists():
     log("ERROR no /run/dbus/system_bus_socket: mount it from the host "
         "(volumes: - /run/dbus:/run/dbus)")
     sys.exit(1)
-if subprocess.run(["busctl", "--system", "status", "org.bluez"],
-                  capture_output=True).returncode:
-    log("WARNING BlueZ is not running on the host (sudo systemctl enable "
-        "--now bluetooth); k-link will wait for it")
-if not Path("/sys/class/bluetooth").exists() or \
-        not any(Path("/sys/class/bluetooth").glob("hci*")):
-    log("WARNING no Bluetooth adapter seen (needs network_mode: host and a "
-        "working adapter on the host)")
+
+if not bt_socket():
+    report("ERROR",
+           "no Bluetooth sockets: set network_mode: host (or the host "
+           "kernel has no Bluetooth)",
+           "Sin Bluetooth en el contenedor: falta <b>network_mode: host</b> "
+           "en docker-compose.yml (o el kernel del equipo no tiene "
+           "Bluetooth).")
+if not (capability(12) and capability(21)):      # NET_ADMIN, SYS_ADMIN
+    report("ERROR", "not privileged: set privileged: true",
+           "El contenedor no es privilegiado: falta <b>privileged: true</b> "
+           "en docker-compose.yml.")
+
+bluez = busctl("status", "org.bluez").returncode == 0
+adapters = sorted(p.name for p in Path("/sys/class/bluetooth").glob("hci*")
+                  if ":" not in p.name) \
+    if Path("/sys/class/bluetooth").exists() else []
+if not bluez:
+    report("ERROR",
+           "BlueZ is not running on the host (sudo systemctl enable --now "
+           "bluetooth); k-link will wait for it",
+           "BlueZ no está en marcha en el equipo: <code>sudo systemctl "
+           "enable --now bluetooth</code>.")
+elif not adapters:
+    report("ERROR", "no Bluetooth adapter on the host",
+           "El equipo no tiene adaptador Bluetooth (o está bloqueado: "
+           "<code>rfkill list</code>).")
+else:
+    r = busctl("get-property", "org.bluez", f"/org/bluez/{adapters[0]}",
+               "org.bluez.Adapter1", "Powered")
+    if r.stdout.strip() == "b false":
+        report("WARNING", f"Bluetooth adapter {adapters[0]} is off",
+               f"El adaptador Bluetooth {adapters[0]} está apagado "
+               "(<code>rfkill unblock bluetooth</code>; "
+               "<code>bluetoothctl power on</code>).")
+    # Another PipeWire/PulseAudio with Bluetooth audio on the host already
+    # owns the hands-free profile; registering it ourselves tells (busctl
+    # exits at once, so BlueZ drops our registration).
+    r = busctl("call", "org.bluez", "/org/bluez",
+               "org.bluez.ProfileManager1", "RegisterProfile", "osa{sv}",
+               "/org/klinknode/probe", "0000111e-0000-1000-8000-00805f9b34fb",
+               "1", "AutoConnect", "b", "false")
+    if "already registered" in r.stderr:
+        report("ERROR",
+               "another Bluetooth audio stack (PipeWire/PulseAudio/k-link) "
+               "runs on the host and owns the hands-free profile: disable "
+               "it (see docker/README.md) and restart the container",
+               "Otro programa del equipo (PipeWire, PulseAudio u otro "
+               "k-link) ya usa el audio Bluetooth y se pelearía con el "
+               "contenedor. Desactívalo (ver docker/README.md) y reinicia "
+               "el contenedor.")
+
+ports = [(cfg["WEB_PORT"], False, "0.0.0.0", "WEB_PORT"),
+         (cfg["KLINK_WEB_PORT"], False, "0.0.0.0", "KLINK_WEB_PORT"),
+         (cfg["PANEL_PORT"], False, "127.0.0.1", "PANEL_PORT"),
+         (cfg["IAX_PORT"], True, "0.0.0.0", "IAX_PORT"),
+         (cfg["USRP_KLINK_PORT"], True, "0.0.0.0", "USRP_KLINK_PORT"),
+         (cfg["USRP_ASL_PORT"], True, "0.0.0.0", "USRP_ASL_PORT"),
+         (cfg["AMI_PORT"], False, "0.0.0.0", "AMI_PORT"),
+         (16080, False, "0.0.0.0", "Allmon3"),
+         (16700, False, "0.0.0.0", "Allmon3 websocket")]
+for port, udp, host, name in ports:
+    if port_busy(port, udp, host):
+        report("ERROR", f"port {port}/{'udp' if udp else 'tcp'} ({name}) "
+               "is already in use on the host: change it",
+               f"El puerto {port}/{'udp' if udp else 'tcp'} ({name}) ya lo "
+               "usa otro programa del equipo: cámbialo en "
+               "docker-compose.yml.")
+if cfg["ECHOLINK"] == "yes" and any(
+        port_busy(p, u) for p, u in ((5198, True), (5199, True),
+                                     (5200, False))):
+    report("ERROR",
+           "EchoLink ports 5198-5199/udp or 5200/tcp are in use: only one "
+           "EchoLink node per host",
+           "Los puertos de EchoLink (5198-5199/udp, 5200/tcp) ya están en "
+           "uso: solo cabe un nodo EchoLink por equipo.")
+if cfg["ADMIN_PASSWORD"] == "k-link":
+    log("WARNING ADMIN_PASSWORD is the default one: change it")
+
+state = Path("/run/k-link-node")
+state.mkdir(parents=True, exist_ok=True)
+(state / "checks.json").write_text(json.dumps(checks))
+if not checks:
+    log("host checks OK")
 
 # --- runtime dirs
 run = Path(os.environ.get("XDG_RUNTIME_DIR", "/run/k-link"))
@@ -66,8 +189,5 @@ log(f"node {node}{' (private)' if node == nodecfg.PRIVATE_NODE else ''}, "
 log(f"panel   http://<host>:{web_port}/   (any user, ADMIN_PASSWORD)")
 log(f"k-link  http://<host>:{cfg['KLINK_WEB_PORT']}/  (pair the adapter here)")
 log(f"allmon3 http://<host>:{web_port}/allmon3/  (user admin)")
-if cfg["ADMIN_PASSWORD"] == "k-link":
-    log("WARNING ADMIN_PASSWORD is the default one: change it")
-
 os.execvp("supervisord", ["supervisord", "-n", "-c",
                           "/etc/supervisor/supervisord.conf"])

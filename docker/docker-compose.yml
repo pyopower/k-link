@@ -2,6 +2,8 @@
 # Bluetooth adapter plugged into its K connector (Abbree kit and similar).
 # Multi-architecture image: amd64 and arm64 (Raspberry Pi 3/4/5/Zero 2 W with a
 # 64-bit OS). No 32-bit ARM: AllStarLink 3 does not build Asterisk for it.
+# Every start checks these requirements: see `docker logs k-link-node` or the
+# red banners in the panel.
 #
 # Host needs: Docker, BlueZ running (sudo systemctl enable --now bluetooth)
 # and NO other PipeWire/PulseAudio using Bluetooth audio (on a desktop,
@@ -36,6 +38,7 @@ services:
       - WEB_PORT=8080          # panel + Allmon3
       - KLINK_WEB_PORT=8077    # k-link web: pairing, levels, echo test
       - IAX_PORT=4569          # AllStarLink IAX2 (udp); open it in your router
+      - AMI_PORT=5038          # Asterisk manager (local); change it if the host has its own Asterisk
       # EchoLink always uses 5198-5199/udp and 5200/tcp (open them in the router)
       # --- Allmon3 title (optional) ---
       - DASH_TITLE=

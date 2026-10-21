@@ -1,7 +1,15 @@
 # k-link node: AllStarLink 3 + EchoLink + Allmon3 + k-link in one container.
-# Multi-arch (linux/amd64, linux/arm64; ASL3 has no 32-bit Asterisk). From the repo root:
-#   docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 .
-FROM debian:bookworm-slim
+# Multi-arch: linux/amd64 and linux/arm64. ASL3 has no 32-bit Asterisk, so on
+# linux/arm/v6 and v7 the image is only a stub that explains it. From the repo root:
+#   docker buildx build -f docker/Dockerfile \
+#     --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 .
+ARG TARGETARCH
+
+# 32-bit ARM: say why instead of "no matching manifest"
+FROM busybox:1.36 AS node-arm
+ENTRYPOINT ["sh", "-c", "echo '[k-link-node] ERROR 32-bit ARM is not supported: AllStarLink 3 has no Asterisk for it. Install a 64-bit OS (Raspberry Pi OS 64-bit, Pi 3/4/5/Zero 2 W) and pull again.' >&2; trap 'exit 0' TERM INT; while :; do sleep 3600 & wait; done"]
+
+FROM debian:bookworm-slim AS node
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ASL_REPO=https://repo.allstarlink.org/public/asl-apt-repos.deb12_all.deb
@@ -42,3 +50,7 @@ ENV KLN_MODE=docker \
 
 VOLUME /data
 ENTRYPOINT ["/usr/local/bin/k-link-node-entry"]
+
+FROM node AS node-amd64
+FROM node AS node-arm64
+FROM node-${TARGETARCH}

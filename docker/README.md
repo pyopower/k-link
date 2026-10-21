@@ -6,8 +6,9 @@ through the Bluetooth adapter of a wireless speaker-mic kit plugged into its
 K connector. Everything is set with variables in `docker-compose.yml`.
 
 Image: `ghcr.io/pyopower/k-link-node` — `linux/amd64` and `linux/arm64`
-(Raspberry Pi 3/4/5/Zero 2 W with a **64-bit** OS). There is no 32-bit ARM
-image: AllStarLink 3 does not publish Asterisk for armhf.
+(Raspberry Pi 3/4/5/Zero 2 W with a **64-bit** OS). There is no working
+32-bit ARM image: AllStarLink 3 does not publish Asterisk for armhf. On a
+32-bit OS the container only prints that in its log.
 
 ## Quick start
 
@@ -41,6 +42,7 @@ docker logs k-link-node        # shows the addresses
 | `WEB_PORT` | panel + Allmon3 (default 8080) |
 | `KLINK_WEB_PORT` | k-link web (default 8077) |
 | `IAX_PORT` | AllStarLink IAX2 udp port (default 4569) |
+| `AMI_PORT` | Asterisk manager port, local only (default 5038; change it if the host runs its own Asterisk) |
 | `DASH_TITLE` | Allmon3 title |
 | `TZ` | time zone |
 
@@ -59,6 +61,26 @@ Open `IAX_PORT`/udp in the router for AllStarLink, and 5198-5199/udp +
   `bluez_monitor.enabled = false`, then `systemctl --user restart wireplumber`.
   A headless server or Raspberry Pi OS Lite usually has none.
 - Only one node with EchoLink per host (fixed EchoLink ports).
+
+## Start checks
+
+At every start the container checks the requirements above. Every problem
+is written to the log (`docker logs k-link-node`) and shown as a red banner
+in the panel:
+
+| Check | Message |
+|---|---|
+| `/run/dbus` mounted | `no /run/dbus/system_bus_socket` (the only one that stops the start) |
+| host network | `no Bluetooth sockets: set network_mode: host` |
+| privileged | `not privileged: set privileged: true` |
+| BlueZ on the host, adapter present and powered | `BlueZ is not running`, `no Bluetooth adapter`, `adapter ... is off` |
+| no other Bluetooth audio stack on the host | `another Bluetooth audio stack ... owns the hands-free profile` |
+| free ports (`WEB_PORT`, `KLINK_WEB_PORT`, `IAX_PORT`, `AMI_PORT`, USRP, Allmon3) | `port N/tcp|udp (...) is already in use` |
+| one EchoLink node per host | `EchoLink ports ... are in use` |
+| 32-bit ARM | `32-bit ARM is not supported` |
+
+The Bluetooth audio check is only made at start: if PipeWire is started on
+the host later, restart the container to check again.
 
 ## Build it yourself
 
